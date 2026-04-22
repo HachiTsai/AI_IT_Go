@@ -1,0 +1,25 @@
+###############################################################################
+# Set default behavior to automatically normalize line endings.
+###############################################################################
+* text=auto
+
+###############################################################################
+# Specific file types
+###############################################################################
+# Jupyter Notebook 建議維持 lf 避免 diff 混亂
+*.ipynb text eol=lf
+
+# === 修改重點區 ===
+# 強制所有平台使用 LF, 確保 Gemini CLI 跨平台相容性
+# Markdown 檔案在 Windows 和 Mac 上都會保持 LF 格式
+*.md text eol=lf
+*.txt text
+*.py text
+
+# === 嚴格區 ===
+# Shell script 必須強制 LF,不然在 Linux/Mac 會跑不動
+*.sh text eol=lf
+
+# Binary files
+*.zip binary
+*.exe binary
