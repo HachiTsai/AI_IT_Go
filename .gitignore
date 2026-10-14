@@ -19,10 +19,6 @@ htmlcov/
 .vscode/
 *.code-workspace
 
-
-# Obsidian 相關
-.obsidian/
-
 # IDE / 編輯器相關 (JetBrains)
 .idea/
 
@@ -30,9 +26,6 @@ htmlcov/
 *.db
 *.sqlite
 *.sqlite3
-_assets/30_Digital_Twin/index/chroma_db/
-**/chroma_db/
-!_assets/30_Digital_Twin/index/chroma_db/.gitkeep
 
 # Log 檔案
 *.log
@@ -44,24 +37,6 @@ Backup*/
 ~$*
 *~
 
-
-# --- Gemini Added ---
-# 忽略敏感資訊
+# 敏感資訊
 .env
 credentials/
-
-# Ignore OS-specific shell plugins
-zsh-syntax-highlighting/
-highlighters/
-gha-creds-*.json
-
-
-
-# Ignore Smart Environment folder
-.smart-env
-copilot/
-80_packed_report/
-10_Project/
-environment-backup/
-
-

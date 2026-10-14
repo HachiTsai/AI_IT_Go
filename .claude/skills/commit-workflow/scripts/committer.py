@@ -1,11 +1,8 @@
 #!/usr/bin/env python3
 """Structured git commit helper.
 
-Ported and trimmed from Hello-World's delivery-commit-workflow/committer.py.
-Kept: staging control, staged diff summary, closed type list, `git commit -F`,
+Staging control, staged diff summary, closed type list, `git commit -F`,
 Co-Authored-By injection, auto-quick mode, push with retry.
-Dropped: agent categories, session-context, Session-Sync, handover, governance
-gate, DocGate, device line.
 
 Modes:
   committer.py                          stage, then print diff/stat + template for drafting

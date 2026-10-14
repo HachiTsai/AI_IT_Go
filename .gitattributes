@@ -10,7 +10,7 @@
 *.ipynb text eol=lf
 
 # === 修改重點區 ===
-# 強制所有平台使用 LF, 確保 Gemini CLI 跨平台相容性
+# 強制所有平台使用 LF, 確保跨平台相容性
 # Markdown 檔案在 Windows 和 Mac 上都會保持 LF 格式
 *.md text eol=lf
 *.txt text

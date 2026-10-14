@@ -5,7 +5,6 @@ whenToUse: 當用戶說「開始提交流程」、「幫我 commit」，或需�
 disableModelInvocation: false
 metadata:
   version: "2026.10.14.1"
-  origin: "改寫自 HachiTsai/Hello-World 的 delivery-commit-workflow"
 ---
 
 # Commit Workflow Skill
@@ -128,11 +127,8 @@ Co-Authored-By: Claude <noreply@anthropic.com>
 
 ## 變更紀錄
 
-- **2026.10.14.1**：移植精簡版 `scripts/committer.py`（約 250 行，原版 1486 行）與 `scripts/tests/`。
-  - **保留**：暫存控制（`--stage-list`／`--exclude`／`--no-stage`）、`--auto-quick`、`--message-file`、`--dry-run`、`--no-push`、Co-Authored-By 注入、type／scope 推斷、各 git 呼叫的 timeout。
-  - **新增**：標題格式驗證（封閉 type 清單）、敏感檔案檢查（取代原治理閘門）、推送退避重試。
-  - **移除**：類別判定、執行者偵測、Session-Sync、session-context 與 handover 掃描、DocGate、執行裝置欄。
+- **2026.10.14.1**：新增 `scripts/committer.py` 與 `scripts/tests/`。
+  - 暫存控制（`--stage-list`／`--exclude`／`--no-stage`）、`--auto-quick`、`--message-file`、`--dry-run`、`--no-push`、Co-Authored-By 注入、type／scope 推斷、各 git 呼叫皆設 timeout。
+  - 標題格式驗證（封閉 type 清單）、敏感檔案檢查、推送退避重試。
 
-- **2026.10.14**：改寫自 Hello-World 的 `delivery-commit-workflow`。
-  - **保留**：staged diff 分析、封閉 Type 清單、統一詳細模板、必填「驗證」、`git commit -F`、Issue 門檻、Co-Authored-By 署名。
-  - **移除**：`committer.py` 腳本與其測試、執行類別（SLC DESIGNER／IT）與 session-context、Session-Sync、GLOBAL Handover、執行者偵測、治理防呆閘門、DocGate、執行裝置欄。這些依賴 Hello-World 專屬的憲法、目錄結構與多 Agent 協作，AI_IT_Go 沒有對應物。
+- **2026.10.14**：建立 skill：staged diff 分析、封閉 Type 清單、統一詳細模板、必填「驗證」、`git commit -F`、Issue 門檻、Co-Authored-By 署名。
