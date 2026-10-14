@@ -4,7 +4,7 @@ description: 結構化 Git 提交流程：分析 staged diff，依統一模板�
 whenToUse: 當用戶說「開始提交流程」、「幫我 commit」，或需要產出結構化 Commit Message 時
 disableModelInvocation: false
 metadata:
-  version: "2026.10.14"
+  version: "2026.10.14.1"
   origin: "改寫自 HachiTsai/Hello-World 的 delivery-commit-workflow"
 ---
 
@@ -14,6 +14,24 @@ metadata:
 
 - `開始提交流程`
 - `幫我 commit`
+- `python .claude/skills/commit-workflow/scripts/committer.py`（暫存並印出 diff 與模板，供 Agent 草擬）
+- `python .claude/skills/commit-workflow/scripts/committer.py --message-file .git/COMMIT_MSG_TEMP --no-stage`（提交已草擬的訊息並推送）
+- `python .claude/skills/commit-workflow/scripts/committer.py --auto-quick`（自動產生精簡訊息並提交，限小型變更）
+
+### 參數
+
+| 參數 | 用途 |
+| :--- | :--- |
+| `--message-file PATH` | 讀取訊息檔，驗證標題後 `git commit -F`，並補上 Co-Authored-By |
+| `--auto-quick` | 依 staged 檔案自動產生標題與 bullet；與 `--message-file` 互斥；超過 10 檔會警告 |
+| `--no-push` | 提交後不推送 |
+| `--dry-run` | 只預覽訊息，不提交 |
+| `--no-stage` | 不執行 `git add`，使用既有暫存區 |
+| `--stage-list PATH...` | 清空暫存區後只暫存指定路徑 |
+| `--exclude PATH...` | `git add .` 後排除指定路徑（支援 glob 與目錄前綴） |
+| `--allow-sensitive` | 略過敏感檔案檢查（`.env`、`*.pem`、`*.key`、`credentials/` 等） |
+
+腳本會：拒絕 type 不在封閉清單內的標題、發現敏感檔案時中止、推送失敗時以 2/4/8/16 秒退避重試，並推送到當前分支。
 
 ## 核心原則
 
@@ -109,6 +127,11 @@ Co-Authored-By: Claude <noreply@anthropic.com>
 6. 不對未被要求的分支推送；推送目標以使用者或環境指定的分支為準。
 
 ## 變更紀錄
+
+- **2026.10.14.1**：移植精簡版 `scripts/committer.py`（約 250 行，原版 1486 行）與 `scripts/tests/`。
+  - **保留**：暫存控制（`--stage-list`／`--exclude`／`--no-stage`）、`--auto-quick`、`--message-file`、`--dry-run`、`--no-push`、Co-Authored-By 注入、type／scope 推斷、各 git 呼叫的 timeout。
+  - **新增**：標題格式驗證（封閉 type 清單）、敏感檔案檢查（取代原治理閘門）、推送退避重試。
+  - **移除**：類別判定、執行者偵測、Session-Sync、session-context 與 handover 掃描、DocGate、執行裝置欄。
 
 - **2026.10.14**：改寫自 Hello-World 的 `delivery-commit-workflow`。
   - **保留**：staged diff 分析、封閉 Type 清單、統一詳細模板、必填「驗證」、`git commit -F`、Issue 門檻、Co-Authored-By 署名。
