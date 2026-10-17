@@ -14,9 +14,10 @@
 - **本機路徑**：`/Users/hachi/Git/AI_IT_Go`
 - **主要分支**：`main`
 - **核心設定檔**：
-  - `pyproject.toml`：採用 PEP 621 標準規範 Python 3.14+ 單一依賴來源（固定 21 個核心與 GCP 監控套件版本號），支援 `uv add <套件>`。
-  - `.agent/rules/python-environment.md`：內嵌完整 `pyproject.toml` 範本並與根目錄 `pyproject.toml` 保持 100% 同步，方便跨專案直接攜帶。
-  - `CLAUDE.md`：專案規則入口索引（自動載入 `.agent/rules/` 模組化規則）。
+  - `pyproject.toml`：採用 PEP 621 標準規範 Python 3.14+ 單一依賴來源，支援 `uv add <套件>`。
+  - `.claude/rules/`：唯一真實來源之模組化規則庫（含 `python-environment.md` 內嵌完整 `pyproject.toml` 範本並保持 100% 同步）。
+  - `.agent/rules/AGENT.md`：Antigravity 唯一轉接入口，指向 `.claude/` 並規定一律採用 Claude 官方語法編寫、測試通過才可 Commit。
+  - `CLAUDE.md`：Claude 專案規則入口索引（自動載入 `.claude/rules/` 模組化規則）。
   - `.vscode/settings.json`：IDE 直譯器預設綁定本機 Conda 環境 `ai-it-go`。
 
 ### 1.2 本機 Conda 環境 (`ai-it-go`)
@@ -32,7 +33,7 @@
 - **提交前安全防護**：
   1. **敏感檔案檢查**：禁止提交 `.env`、`credentials/`、`*.key`、`*.pem`。
   2. **依賴漂移檢查 (`find_dependency_issues`)**：自動以 AST 掃描 staged `.py` 檔案匯入的第三方套件，比對 `pyproject.toml`，若有未記錄的套件（如隨手 `pip install` 但漏寫檔案）會在提交時攔截並提示版本。
-  3. **規則與依賴雙向同步檢查**：自動驗證 `pyproject.toml` 與 `.agent/rules/python-environment.md` 內嵌的 ` ```toml ` 區塊是否完全一致。
+  3. **規則與依賴雙向同步檢查**：自動驗證 `pyproject.toml` 與 `.claude/rules/python-environment.md` 內嵌的 ` ```toml ` 區塊是否完全一致，並確保 `.claude/rules/*.md` 皆已同步索引於 `CLAUDE.md` 與 `.agent/rules/AGENT.md`。
 - **常用提交流程**：
   ```bash
   # 暫存變更並執行各項檢查、印出 diff 與草擬模板

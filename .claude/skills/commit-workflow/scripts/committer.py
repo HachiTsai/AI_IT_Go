@@ -161,35 +161,38 @@ def _local_module_names(repo_root: Path) -> Set[str]:
 
 
 def find_rule_sync_issues(repo_root: Path = Path(".")) -> List[str]:
-    """Verify .agent/.claude symlinks and that all .agent/rules/*.md files are indexed in CLAUDE.md."""
+    """Verify that .claude/rules/*.md are indexed in both CLAUDE.md and .agent/rules/AGENT.md."""
     issues: List[str] = []
+    claude_rules = repo_root / ".claude" / "rules"
     agent_rules = repo_root / ".agent" / "rules"
-    claude_dir = repo_root / ".claude"
+    agent_md = agent_rules / "AGENT.md"
     claude_md = repo_root / "CLAUDE.md"
 
-    if agent_rules.is_dir() and claude_dir.exists():
-        claude_rules = claude_dir / "rules"
-        if not claude_rules.is_symlink() or str(claude_rules.readlink()) != "../.agent/rules":
-            issues.append(".claude/rules 必須是指向 ../.agent/rules 的符號連結（Symlink）")
+    if agent_rules.is_dir():
+        extra_agent_files = [p.name for p in sorted(agent_rules.glob("*.md")) if p.name != "AGENT.md"]
+        if extra_agent_files:
+            issues.append(f".agent/rules/ 僅應保留 AGENT.md 單一入口，請將規則移至 .claude/rules/：{', '.join(extra_agent_files)}")
 
-    if (claude_dir / "skills").is_dir() and (repo_root / ".agent").is_dir():
-        agent_skills = repo_root / ".agent" / "skills"
-        if not agent_skills.is_symlink() or str(agent_skills.readlink()) != "../.claude/skills":
-            issues.append(".agent/skills 必須是指向 ../.claude/skills 的符號連結（Symlink）")
-
-    if agent_rules.is_dir() and claude_md.is_file():
-        claude_text = claude_md.read_text(encoding="utf-8", errors="replace")
-        for rule_file in sorted(agent_rules.glob("*.md")):
-            if rule_file.name not in claude_text:
-                issues.append(f".agent/rules/{rule_file.name} 尚未加入 CLAUDE.md 索引中")
+    if claude_rules.is_dir():
+        rule_files = sorted(claude_rules.glob("*.md"))
+        if claude_md.is_file():
+            claude_text = claude_md.read_text(encoding="utf-8", errors="replace")
+            for rf in rule_files:
+                if rf.name not in claude_text:
+                    issues.append(f".claude/rules/{rf.name} 尚未加入 CLAUDE.md 索引中")
+        if agent_md.is_file():
+            agent_text = agent_md.read_text(encoding="utf-8", errors="replace")
+            for rf in rule_files:
+                if rf.name not in agent_text:
+                    issues.append(f".claude/rules/{rf.name} 尚未加入 .agent/rules/AGENT.md 索引中")
     return issues
 
 
 def find_dependency_issues(files: Sequence[str], repo_root: Path = Path(".")) -> List[str]:
-    """Check staged .py imports against pyproject.toml, and sync with .agent/rules/python-environment.md."""
+    """Check staged .py imports against pyproject.toml, and sync with .claude/rules/python-environment.md."""
     issues: List[str] = find_rule_sync_issues(repo_root)
     pyproj_path = repo_root / "pyproject.toml"
-    rule_path = repo_root / ".agent" / "rules" / "python-environment.md"
+    rule_path = repo_root / ".claude" / "rules" / "python-environment.md"
     has_pyproj, has_rule = pyproj_path.is_file(), rule_path.is_file()
     if not has_pyproj and not has_rule:
         return issues
@@ -200,9 +203,9 @@ def find_dependency_issues(files: Sequence[str], repo_root: Path = Path(".")) ->
 
     if has_pyproj and has_rule:
         for pkg in sorted(pyproj_pkgs - rule_pkgs):
-            issues.append(f"{pkg}（僅在 pyproject.toml，未同步至 .agent/rules/python-environment.md）")
+            issues.append(f"{pkg}（僅在 pyproject.toml，未同步至 .claude/rules/python-environment.md）")
         for pkg in sorted(rule_pkgs - pyproj_pkgs):
-            issues.append(f"{pkg}（僅在 .agent/rules/python-environment.md，未同步至 pyproject.toml）")
+            issues.append(f"{pkg}（僅在 .claude/rules/python-environment.md，未同步至 pyproject.toml）")
 
     py_files = [f for f in files if Path(f).suffix.lower() == ".py" and (repo_root / f).is_file()]
     if not py_files:
@@ -406,8 +409,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
         dep_issues = [] if args.allow_missing_deps else find_dependency_issues(files)
         if dep_issues and (args.message_file or args.auto_quick or args.check_only):
-            print("❌ 發現未記錄或未同步的套件依賴／規則捷徑，已中止：", *dep_issues, sep="\n   - ", file=sys.stderr)
-            print("   請先同步更新 pyproject.toml、.agent/rules/ 與 CLAUDE.md 並暫存，或加 --allow-missing-deps 略過。", file=sys.stderr)
+            print("❌ 發現未記錄或未同步的套件依賴／規則索引，已中止：", *dep_issues, sep="\n   - ", file=sys.stderr)
+            print("   請先同步更新 pyproject.toml、.claude/rules/、CLAUDE.md 與 .agent/rules/AGENT.md 並暫存，或加 --allow-missing-deps 略過。", file=sys.stderr)
             return 1
 
         if args.check_only:
@@ -424,7 +427,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             print(f"📋 Staged 檔案（{len(files)}）：\n   " + "\n   ".join(files))
             if dep_issues:
                 print("\n⚠️ 發現未記錄或未同步的套件依賴：", *dep_issues, sep="\n   - ")
-                print("   提交時將會攔截，請先同步更新 pyproject.toml 與 .agent/rules/python-environment.md 並重新暫存（或加 --allow-missing-deps）。")
+                print("   提交時將會攔截，請先同步更新 pyproject.toml 與 .claude/rules/python-environment.md 並重新暫存（或加 --allow-missing-deps）。")
             print("\n📊 統計：\n" + staged_stat())
             print("📝 Diff（已排除 *.json）：\n" + staged_diff())
             print("-" * 60 + "\n請依下列模板草擬訊息，寫入 .git/COMMIT_MSG_TEMP 後執行：")

@@ -14,7 +14,7 @@
 - **禁止只安裝不記錄**：新增任何第三方套件時，**嚴禁**只執行 `pip install <pkg>` 或 `uv pip install <pkg>` 而不更新設定檔。
 - **規則檔與設定檔必須完全一致**：
   - 下方第 3 節收錄了標準 `pyproject.toml` 完整內容，使本規則檔具備跨專案獨立移植能力（新專案只需帶上本規則檔即可直接生成 `pyproject.toml`）。
-  - 當透過 `uv add <pkg>` 或手動在 `pyproject.toml` 新增／更新套件時，**必須同步更新本檔案（`.agent/rules/python-environment.md`）下方區塊**，確保兩者的依賴清單與版本號 100% 一致。
+  - 當透過 `uv add <pkg>` 或手動在 `pyproject.toml` 新增／更新套件時，**必須同步更新本檔案（`.claude/rules/python-environment.md`）下方區塊**，確保兩者的依賴清單與版本號 100% 一致。
   - `committer.py` 在提交前會自動檢查 staged `.py` 的 `import` 套件是否已寫入 `pyproject.toml`，並比對 `pyproject.toml` 與本規則檔內的 `toml` 區塊是否一致。
 
 ## 3. 標準 `pyproject.toml` 內容（須與專案根目錄 `pyproject.toml` 保持一致）

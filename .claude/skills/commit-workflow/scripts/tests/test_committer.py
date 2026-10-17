@@ -97,7 +97,7 @@ def test_missing_deps_blocks_commit_and_flag_allows(repo):
 
 
 def test_manifest_sync_and_local_imports(repo):
-    rules_dir = repo / ".agent" / "rules"
+    rules_dir = repo / ".claude" / "rules"
     rules_dir.mkdir(parents=True, exist_ok=True)
     (rules_dir / "python-environment.md").write_text(
         '# Rule\n```toml\n[project]\nname = "x"\ndependencies = ["pytest==9.1.1"]\n```\n'
@@ -114,19 +114,22 @@ def test_manifest_sync_and_local_imports(repo):
     assert c.find_dependency_issues(["app.py", "helper.py"], repo) == []
 
 
-def test_rule_symlink_and_claude_md_sync(repo):
-    rules_dir = repo / ".agent" / "rules"
-    rules_dir.mkdir(parents=True, exist_ok=True)
-    (rules_dir / "gcp-free-tier.md").write_text("# GCP\n")
-    claude_skills = repo / ".claude" / "skills"
-    claude_skills.mkdir(parents=True, exist_ok=True)
+def test_rule_index_sync_between_claude_and_agent_md(repo):
+    claude_rules = repo / ".claude" / "rules"
+    claude_rules.mkdir(parents=True, exist_ok=True)
+    (claude_rules / "gcp-free-tier.md").write_text("# GCP\n")
+
+    agent_rules = repo / ".agent" / "rules"
+    agent_rules.mkdir(parents=True, exist_ok=True)
+    (agent_rules / "AGENT.md").write_text("# Bridge\n")
+    (agent_rules / "extra.md").write_text("# Duplicate\n")
     (repo / "CLAUDE.md").write_text("# Index\n")
 
     issues = c.find_rule_sync_issues(repo)
     assert len(issues) == 3
 
-    (repo / ".claude" / "rules").symlink_to("../.agent/rules")
-    (repo / ".agent" / "skills").symlink_to("../.claude/skills")
-    (repo / "CLAUDE.md").write_text("# Index\n- @[.agent/rules/gcp-free-tier.md]\n")
+    (agent_rules / "extra.md").unlink()
+    (agent_rules / "AGENT.md").write_text("# Bridge\n- @[.claude/rules/gcp-free-tier.md]\n")
+    (repo / "CLAUDE.md").write_text("# Index\n- @[.claude/rules/gcp-free-tier.md]\n")
     assert c.find_rule_sync_issues(repo) == []
 

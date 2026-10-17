@@ -1,12 +1,13 @@
 # AI_IT_Go 開發與環境規範
 
-本專案的所有通用規則統一集中於 `.agent/rules/` 目錄下獨立管理（`.claude/rules` 已透過軟連結同步指向該目錄），Antigravity 與 Claude 皆須嚴格遵守：
+本專案以 `.claude/` 為唯一真實來源（Single Source of Truth），所有通用規則與技能皆採用 Claude 官方語法集中於 `.claude/rules/` 與 `.claude/skills/` 管理（Antigravity 則透過 `.agent/rules/AGENT.md` 自動載入）：
 
-- **GCP 永久免費額度規範**：@[.agent/rules/gcp-free-tier.md](.agent/rules/gcp-free-tier.md)
-- **系統層級 CLI 工具規範**：@[.agent/rules/system-cli-tools.md](.agent/rules/system-cli-tools.md)
-- **Python 環境與套件同步規範**：@[.agent/rules/python-environment.md](.agent/rules/python-environment.md)
-- **Git 結構化提交流程規範**：@[.agent/rules/git-commit-workflow.md](.agent/rules/git-commit-workflow.md)
+- **GCP 永久免費額度規範**：@[.claude/rules/gcp-free-tier.md](.claude/rules/gcp-free-tier.md)
+- **系統層級 CLI 工具規範**：@[.claude/rules/system-cli-tools.md](.claude/rules/system-cli-tools.md)
+- **Python 環境與套件同步規範**：@[.claude/rules/python-environment.md](.claude/rules/python-environment.md)
+- **Git 結構化提交流程規範**：@[.claude/rules/git-commit-workflow.md](.claude/rules/git-commit-workflow.md)
 
-## 擴充規則方式
+## 開發、擴充與提交鐵律
 
-新增任何通用規則時，請直接於 `.agent/rules/` 下新增獨立的 `<rule-name>.md` 檔案，即可同時對 Antigravity 與 Claude 生效。
+1. **擴充規則與技能**：新增任何規則或技能時，請以 Claude 官方語法直接建立於 `.claude/rules/<rule-name>.md` 或 `.claude/skills/<skill-name>/`，並同步更新本檔與 `.agent/rules/AGENT.md` 的引用清單。
+2. **測試通過才可 Commit**：任何變更必須先通過 `pytest` 與 `ruff check .` 驗證無誤後，才可透過 `.claude/skills/commit-workflow/scripts/committer.py` 提交。
