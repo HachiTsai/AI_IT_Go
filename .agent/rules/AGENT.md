@@ -15,8 +15,12 @@
 3. **先測試、後主動使用技能提交（Auto-Commit with Skill After Test）**：
    - 任何程式碼、腳本、依賴或規則變更，在提交前**必須先透過本機 Conda 環境（`ai-it-go`）執行測試與語法檢查**（`pytest` 與 `ruff check .`）。
    - 確認所有測試與檢查通過後，Agent 必須主動透過 `.claude/skills/commit-workflow/scripts/committer.py` 執行結構化 Commit 與 Push，無需等待使用者催促。
+4. **分支與 PR 鐵律（Branch & PR Protocol）**：
+   - 所有變更一律在指定的分支上進行並向 `main` 發起 Pull Request，禁止直接 push 到 `main` 分支。
+   - GitHub Actions CI（`lint-and-tests`）全綠後採 Merge Commit 合併。
 
 ---
+
 
 
 ## 2. 專案規則與技能自動載入（指向 `.claude/`）
