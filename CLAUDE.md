@@ -10,4 +10,5 @@
 ## 開發、擴充與提交鐵律
 
 1. **擴充規則與技能**：新增任何規則或技能時，請以 Claude 官方語法直接建立於 `.claude/rules/<rule-name>.md` 或 `.claude/skills/<skill-name>/`，並同步更新本檔與 `.agent/rules/AGENT.md` 的引用清單。
-2. **測試通過才可 Commit**：任何變更必須先通過 `pytest` 與 `ruff check .` 驗證無誤後，才可透過 `.claude/skills/commit-workflow/scripts/committer.py` 提交。
+2. **測試通過主動使用技能自動 Commit**：任何變更必須先通過 `pytest` 與 `ruff check .` 驗證無誤；完成後 Agent 必須主動使用 `.claude/skills/commit-workflow/scripts/committer.py` 執行結構化 Commit 與 Push，嚴禁使用未經驗證的手動提交，無需等待使用者口令。
+

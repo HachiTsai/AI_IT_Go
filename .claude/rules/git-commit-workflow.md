@@ -2,7 +2,12 @@
 
 所有 Git 提交與推送操作一律透過 `.claude/skills/commit-workflow/scripts/committer.py` 執行，並遵循 [`.claude/skills/commit-workflow/SKILL.md`](../../.claude/skills/commit-workflow/SKILL.md) 規範：
 
-## 1. 標準提交步驟
+## 1. 自動提交流程原則
+
+- **任務完成主動提交（Auto-Commit on Completion）**：任何功能開發、重構、設定或規則變更完成，並在通過測試與品質驗證（`pytest` 與 `ruff`）後，**Agent 必須主動使用 `commit-workflow` 技能自動執行結構化提交與推送，無需等待使用者口令催促**。
+- **禁止隨意手動提交**：嚴禁使用 raw `git commit -m`，所有提交一律使用技能腳本，確保 Commit Message 符合 SSOT 結構化模板規範。
+
+## 2. 標準提交步驟
 
 1. **暫存與檢查**：
    ```bash
@@ -15,8 +20,14 @@
    python .claude/skills/commit-workflow/scripts/committer.py --message-file .git/COMMIT_MSG_TEMP --no-stage
    ```
 
-## 2. 禁止事項
+## 3. 安全防護與依賴防呆
+
+- **敏感檔案攔截**：暫存區若包含 `.env*`、憑證私鑰、`credentials.json` 等檔案，腳本將自動中止並阻擋提交（可加 `--allow-sensitive` 解除）。
+- **Python 依賴與規則同步攔截**：AST 自動分析暫存 Python 檔的 `import` 是否登記於 `pyproject.toml`，並驗證 `pyproject.toml` 與 `.claude/rules/python-environment.md` 是否 100% 同步（可加 `--allow-missing-deps` 略過）。
+
+## 4. 禁止事項
 
 - 禁止使用 `git commit -m` 傳遞多行訊息，一律使用 `--message-file`（內部呼叫 `git commit -F`）。
 - 禁止提交任何明文金鑰、OAuth 憑證或 `.env` 檔案。
 - 未經使用者明確同意，禁止執行 `git reset --hard`、`git rebase` 或 `git push --force`。
+

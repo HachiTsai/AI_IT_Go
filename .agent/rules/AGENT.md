@@ -12,11 +12,12 @@
 2. **採用 Claude Code 官方語法編寫**：
    - 新增或修改任何 Rule、Skill（`SKILL.md`）或設定時，一律遵循 **Claude 官方原生語法與目錄結構**編寫於 `.claude/` 下。
    - 新增 `.claude/rules/<name>.md` 時，必須同步將引用加入根目錄 `CLAUDE.md` 與本檔案（`.agent/rules/AGENT.md`）第 2 節清單中。
-3. **先測試、後提交（Test Before Commit）**：
+3. **先測試、後主動使用技能提交（Auto-Commit with Skill After Test）**：
    - 任何程式碼、腳本、依賴或規則變更，在提交前**必須先透過本機 Conda 環境（`ai-it-go`）執行測試與語法檢查**（`pytest` 與 `ruff check .`）。
-   - 確認所有測試與檢查通過後，才可透過 `.claude/skills/commit-workflow/scripts/committer.py` 執行結構化 Commit 與 Push。
+   - 確認所有測試與檢查通過後，Agent 必須主動透過 `.claude/skills/commit-workflow/scripts/committer.py` 執行結構化 Commit 與 Push，無需等待使用者催促。
 
 ---
+
 
 ## 2. 專案規則與技能自動載入（指向 `.claude/`）
 
