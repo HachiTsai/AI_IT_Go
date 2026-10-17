@@ -29,7 +29,7 @@ metadata:
 | `--stage-list PATH...` | 清空暫存區後只暫存指定路徑 |
 | `--exclude PATH...` | `git add .` 後排除指定路徑（支援 glob 與目錄前綴） |
 | `--allow-sensitive` | 略過敏感檔案檢查（`.env`、`*.pem`、`*.key`、`credentials/` 等） |
-| `--allow-missing-deps` | 略過未記錄套件與依賴檔（`requirements.txt`／`pyproject.toml`）同步檢查 |
+| `--allow-missing-deps` | 略過未記錄套件與依賴檔（`pyproject.toml`／`.agent/rules/python-environment.md`）同步檢查 |
 
 腳本會：拒絕 type 不在封閉清單內的標題、發現敏感檔案或未記錄套件依賴時中止、推送失敗時以 2/4/8/16 秒退避重試，並推送到當前分支。
 
@@ -46,7 +46,7 @@ metadata:
    不必遍歷 `git log`，需要對齊既有風格時再看最近 3～5 筆標題。
 3. **安全與依賴檢查**：
    - staged 內若含 `.env`、`credentials/`、金鑰、token 等敏感內容，停止並告知使用者，不提交。
-   - 若 `committer.py` 提示 staged `.py` 匯入了未記錄的第三方套件，或 `pyproject.toml` 與 `requirements.txt` 不同步，先補齊依賴檔並重新暫存後再提交。
+   - 若 `committer.py` 提示 staged `.py` 匯入了未記錄的第三方套件，或 `pyproject.toml` 與 `.agent/rules/python-environment.md` 不同步，先補齊依賴並重新暫存後再提交。
 4. **草擬**：依下方模板直接寫出最終版本，不提供多個選項讓使用者挑。
 5. **提交**：寫入 `.git/COMMIT_MSG_TEMP`，執行 `git commit -F .git/COMMIT_MSG_TEMP`，成功後刪除暫存檔。
 6. **推送**：`git push -u origin <當前分支>`；網路失敗時依 2s、4s、8s、16s 退避重試最多 4 次。

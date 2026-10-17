@@ -90,20 +90,26 @@ def test_dry_run_does_not_commit(repo):
 
 
 def test_missing_deps_blocks_commit_and_flag_allows(repo):
-    (repo / "requirements.txt").write_text("pytest==9.1.1\n")
+    (repo / "pyproject.toml").write_text('[project]\nname = "x"\ndependencies = ["pytest==9.1.1"]\n')
     (repo / "app.py").write_text("import os\nimport some_unrecorded_pkg_xyz\n")
     assert c.main(["--auto-quick", "--no-push"]) == 1
     assert c.main(["--auto-quick", "--no-push", "--allow-missing-deps"]) == 0
 
 
 def test_manifest_sync_and_local_imports(repo):
-    (repo / "requirements.txt").write_text("pytest==9.1.1\n")
+    rules_dir = repo / ".agent" / "rules"
+    rules_dir.mkdir(parents=True, exist_ok=True)
+    (rules_dir / "python-environment.md").write_text(
+        '# Rule\n```toml\n[project]\nname = "x"\ndependencies = ["pytest==9.1.1"]\n```\n'
+    )
     (repo / "pyproject.toml").write_text('[project]\nname = "x"\ndependencies = ["pytest==9.1.1", "httpx==0.28.1"]\n')
     (repo / "helper.py").write_text("X = 1\n")
     (repo / "app.py").write_text("import sys\nimport helper\nimport pytest\n")
     issues = c.find_dependency_issues(["app.py", "helper.py"], repo)
     assert len(issues) == 1
     assert "httpx" in issues[0]
-    (repo / "requirements.txt").write_text("pytest==9.1.1\nhttpx==0.28.1\n")
+    (rules_dir / "python-environment.md").write_text(
+        '# Rule\n```toml\n[project]\nname = "x"\ndependencies = ["pytest==9.1.1", "httpx==0.28.1"]\n```\n'
+    )
     assert c.find_dependency_issues(["app.py", "helper.py"], repo) == []
 

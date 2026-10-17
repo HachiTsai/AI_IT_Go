@@ -106,32 +106,17 @@ def find_sensitive(files: Sequence[str]) -> List[str]:
 
 
 REQ_NAME_RE = re.compile(r"^\s*([A-Za-z0-9][A-Za-z0-9._-]*)")
+TOML_BLOCK_RE = re.compile(r"```toml\s*\n(.*?)```", re.S)
 
 
 def normalize_pkg_name(name: str) -> str:
     return re.sub(r"[-_.]+", "-", name).strip("-").lower()
 
 
-def parse_requirements_txt(path: Path) -> Set[str]:
+def _extract_deps_from_toml(toml_text: str) -> Set[str]:
     pkgs: Set[str] = set()
-    if not path.is_file():
-        return pkgs
-    for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
-        line = line.split("#", 1)[0].strip()
-        if not line or line.startswith("-"):
-            continue
-        m = REQ_NAME_RE.match(line)
-        if m:
-            pkgs.add(normalize_pkg_name(m.group(1)))
-    return pkgs
-
-
-def parse_pyproject_deps(path: Path) -> Set[str]:
-    pkgs: Set[str] = set()
-    if not path.is_file():
-        return pkgs
     try:
-        data = tomllib.loads(path.read_text(encoding="utf-8"))
+        data = tomllib.loads(toml_text)
     except Exception:
         return pkgs
     proj = data.get("project") or {}
@@ -150,6 +135,19 @@ def parse_pyproject_deps(path: Path) -> Set[str]:
     return pkgs
 
 
+def parse_pyproject_deps(path: Path) -> Set[str]:
+    if not path.is_file():
+        return set()
+    return _extract_deps_from_toml(path.read_text(encoding="utf-8", errors="replace"))
+
+
+def parse_rule_toml_deps(path: Path) -> Set[str]:
+    if not path.is_file():
+        return set()
+    m = TOML_BLOCK_RE.search(path.read_text(encoding="utf-8", errors="replace"))
+    return _extract_deps_from_toml(m.group(1)) if m else set()
+
+
 def _local_module_names(repo_root: Path) -> Set[str]:
     names: Set[str] = set()
     skip_dirs = {".git", ".venv", "venv", "__pycache__", ".pytest_cache", "node_modules"}
@@ -163,23 +161,23 @@ def _local_module_names(repo_root: Path) -> Set[str]:
 
 
 def find_dependency_issues(files: Sequence[str], repo_root: Path = Path(".")) -> List[str]:
-    """Check staged .py imports against requirements.txt / pyproject.toml, and manifest sync."""
-    req_path = repo_root / "requirements.txt"
+    """Check staged .py imports against pyproject.toml, and sync with .agent/rules/python-environment.md."""
     pyproj_path = repo_root / "pyproject.toml"
-    has_req, has_pyproj = req_path.is_file(), pyproj_path.is_file()
-    if not has_req and not has_pyproj:
+    rule_path = repo_root / ".agent" / "rules" / "python-environment.md"
+    has_pyproj, has_rule = pyproj_path.is_file(), rule_path.is_file()
+    if not has_pyproj and not has_rule:
         return []
 
-    req_pkgs = parse_requirements_txt(req_path)
     pyproj_pkgs = parse_pyproject_deps(pyproj_path)
-    declared = req_pkgs | pyproj_pkgs
+    rule_pkgs = parse_rule_toml_deps(rule_path)
+    declared = pyproj_pkgs | rule_pkgs
     issues: List[str] = []
 
-    if has_req and has_pyproj:
-        for pkg in sorted(pyproj_pkgs - req_pkgs):
-            issues.append(f"{pkg}（僅在 pyproject.toml，未同步至 requirements.txt）")
-        for pkg in sorted(req_pkgs - pyproj_pkgs):
-            issues.append(f"{pkg}（僅在 requirements.txt，未同步至 pyproject.toml）")
+    if has_pyproj and has_rule:
+        for pkg in sorted(pyproj_pkgs - rule_pkgs):
+            issues.append(f"{pkg}（僅在 pyproject.toml，未同步至 .agent/rules/python-environment.md）")
+        for pkg in sorted(rule_pkgs - pyproj_pkgs):
+            issues.append(f"{pkg}（僅在 .agent/rules/python-environment.md，未同步至 pyproject.toml）")
 
     py_files = [f for f in files if Path(f).suffix.lower() == ".py" and (repo_root / f).is_file()]
     if not py_files:
@@ -213,7 +211,7 @@ def find_dependency_issues(files: Sequence[str], repo_root: Path = Path(".")) ->
                 spec = f"{dist}=={importlib.metadata.version(dist)}"
             except importlib.metadata.PackageNotFoundError:
                 spec = dist
-            issues.append(f"{spec}（於 {f} 匯入 `{mod}`，未記錄於依賴檔）")
+            issues.append(f"{spec}（於 {f} 匯入 `{mod}`，未記錄於 pyproject.toml）")
     return issues
 
 
@@ -383,7 +381,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         dep_issues = [] if args.allow_missing_deps else find_dependency_issues(files)
         if dep_issues and (args.message_file or args.auto_quick):
             print("❌ 發現未記錄或未同步的套件依賴，已中止：", *dep_issues, sep="\n   - ", file=sys.stderr)
-            print("   請先更新 requirements.txt / pyproject.toml 並暫存，或加 --allow-missing-deps 略過。", file=sys.stderr)
+            print("   請先同步更新 pyproject.toml 與 .agent/rules/python-environment.md 並暫存，或加 --allow-missing-deps 略過。", file=sys.stderr)
             return 1
 
         message_file = args.message_file
@@ -397,7 +395,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             print(f"📋 Staged 檔案（{len(files)}）：\n   " + "\n   ".join(files))
             if dep_issues:
                 print("\n⚠️ 發現未記錄或未同步的套件依賴：", *dep_issues, sep="\n   - ")
-                print("   提交時將會攔截，請先更新 requirements.txt / pyproject.toml 並重新暫存（或加 --allow-missing-deps）。")
+                print("   提交時將會攔截，請先同步更新 pyproject.toml 與 .agent/rules/python-environment.md 並重新暫存（或加 --allow-missing-deps）。")
             print("\n📊 統計：\n" + staged_stat())
             print("📝 Diff（已排除 *.json）：\n" + staged_diff())
             print("-" * 60 + "\n請依下列模板草擬訊息，寫入 .git/COMMIT_MSG_TEMP 後執行：")

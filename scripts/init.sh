@@ -29,7 +29,5 @@ if command -v uv >/dev/null 2>&1 && [ -z "$CONDA_DEFAULT_ENV" ]; then
   uv venv --allow-existing --python 3.14 .venv
   if [ -f "pyproject.toml" ]; then
     uv pip install --python .venv/bin/python -r pyproject.toml
-  elif [ -f "requirements.txt" ]; then
-    uv pip install --python .venv/bin/python -r requirements.txt
   fi
 fi
