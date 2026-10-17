@@ -1,39 +1,57 @@
 # Slack & GCP & GitHub 環境與監控完整配置指南
 
 > **建立日期**：2026-10-17  
-> **最後更新**：2026-10-17 16:18 (驗證 Webhook 移除測試)  
+> **最後更新**：2026-10-17 17:32（完成 `.claude/` 單一真實來源架構與 `.agent/rules/AGENT.md` 轉接整合）  
 > **專案儲存庫**：[`https://github.com/HachiTsai/AI_IT_Go.git`](https://github.com/HachiTsai/AI_IT_Go.git)  
 > **GCP 專案**：`gen-lang-client-0215358824`（Google-AI-Studio）  
 > **帳單帳戶**：`01F547-EAD5DC-D3D0C8`
 
 ---
 
-## 1. GitHub 專案與 Python 依賴管理
+## 1. GitHub 專案、規則庫與 Python 依賴管理
 
-### 1.1 儲存庫結構
+### 1.1 儲存庫與跨 Agent 單一真實來源架構（`.claude/` + `.agent/rules/AGENT.md`）
 - **本機路徑**：`/Users/hachi/Git/AI_IT_Go`
 - **主要分支**：`main`
-- **核心設定檔**：
-  - `pyproject.toml`：採用 PEP 621 標準規範 Python 3.14+ 單一依賴來源，支援 `uv add <套件>`。
-  - `.claude/rules/`：唯一真實來源之模組化規則庫（含 `python-environment.md` 內嵌完整 `pyproject.toml` 範本並保持 100% 同步）。
-  - `.agent/rules/AGENT.md`：Antigravity 唯一轉接入口，指向 `.claude/` 並規定一律採用 Claude 官方語法編寫、測試通過才可 Commit。
-  - `CLAUDE.md`：Claude 專案規則入口索引（自動載入 `.claude/rules/` 模組化規則）。
-  - `.vscode/settings.json`：IDE 直譯器預設綁定本機 Conda 環境 `ai-it-go`。
+- **設計核心（Single Source of Truth）**：
+  為避免同時維護 `.claude/` 與 `.agent/` 兩套重複檔案或複雜的雙向 Symlink，全專案所有實體規則與技能統一以 **Claude 官方原生語法**集中於 **`.claude/`** 目錄下管理；Antigravity 則僅透過單一入口檔 `.agent/rules/AGENT.md` 的 `@[...]` 語法自動展開載入：
 
-### 1.2 本機 Conda 環境 (`ai-it-go`)
-- **Python 版本**：Python 3.14.8
-- **環境路徑**：`/opt/homebrew/Caskroom/miniforge/base/envs/ai-it-go`
-- **啟用指令**：
-  ```bash
-  conda activate ai-it-go
-  ```
+```text
+├── CLAUDE.md                             # Claude 官方規則入口索引
+├── pyproject.toml                        # Python 3.14 唯一套件依賴與工具設定來源（已廢除 requirements.txt）
+├── .claude/                              # ⭐ 唯一真實來源（100% Claude 官方原生結構）
+│   ├── rules/                            # 模組化規則庫（每條規則獨立管理）
+│   │   ├── gcp-free-tier.md              # GCP Always Free 永久免費額度與區域（us-central1 等）硬性規範
+│   │   ├── system-cli-tools.md           # 本機（Homebrew/Conda）與雲端系統層級 CLI 工具盤點與安裝規範
+│   │   ├── python-environment.md         # Python 環境規範，內嵌完整 pyproject.toml 並保持 100% 雙向同步
+│   │   └── git-commit-workflow.md        # 結構化 Git 提交流程與禁止事項規範
+│   └── skills/
+│       └── commit-workflow/              # 自動化提交流程 Skill（含 committer.py 與單元測試）
+└── .agent/                               # Antigravity 輕量轉接層
+    └── rules/
+        └── AGENT.md                      # Antigravity 唯一導引入口，指向 .claude/ 並強制先測試後提交
+```
 
-### 1.3 提交與依賴檢查機制 (`commit-workflow`)
+### 1.2 本機環境配置（Conda `ai-it-go` 與系統 CLI 工具）
+- **Python 虛擬環境**：
+  - 版本：Python 3.14.8（Conda 環境名稱：`ai-it-go`）
+  - 路徑：`/opt/homebrew/Caskroom/miniforge/base/envs/ai-it-go`
+  - IDE 綁定：`.vscode/settings.json` 預設指向該直譯器。
+- **系統層級 CLI 工具（詳見 `.claude/rules/system-cli-tools.md`）**：
+  - 雲端與容器：`gcloud` (`589.0.0`，含 `alpha`/`beta` 組件)、`docker` (`28.3.3`)、`kubectl`、`minikube`
+  - 版控與協作：`git` (`2.54.0`)、`gh` (`2.101.0`)、`lab`
+  - 語言與套件：`conda` (`26.1.1`)、`uv` (`0.13.1`，已透過 Homebrew 補齊於 `/opt/homebrew/bin/uv`)、`pipx`、`node` (`v25.9.0`)
+  - 搜尋與系統：`rg` (`15.2.0`)、`fd` (`10.5.0`)、`gpg` (`2.5.18`)、`sqlite3`、`mkdocs`
+
+### 1.3 提交與同步防呆機制 (`commit-workflow`)
 - 位於 `.claude/skills/commit-workflow/scripts/committer.py`。
-- **提交前安全防護**：
-  1. **敏感檔案檢查**：禁止提交 `.env`、`credentials/`、`*.key`、`*.pem`。
-  2. **依賴漂移檢查 (`find_dependency_issues`)**：自動以 AST 掃描 staged `.py` 檔案匯入的第三方套件，比對 `pyproject.toml`，若有未記錄的套件（如隨手 `pip install` 但漏寫檔案）會在提交時攔截並提示版本。
-  3. **規則與依賴雙向同步檢查**：自動驗證 `pyproject.toml` 與 `.claude/rules/python-environment.md` 內嵌的 ` ```toml ` 區塊是否完全一致，並確保 `.claude/rules/*.md` 皆已同步索引於 `CLAUDE.md` 與 `.agent/rules/AGENT.md`。
+- **提交前四大自動防護**：
+  1. **測試先行鐵律**：於 `CLAUDE.md` 與 `.agent/rules/AGENT.md` 明訂任何變更必須先通過 `pytest` 與 `ruff check .` 驗證無誤才可 Commit。
+  2. **敏感檔案攔截 (`find_sensitive`)**：禁止提交 `.env`、`credentials/`、`*.key`、`*.pem`。
+  3. **Python 依賴漂移攔截 (`find_dependency_issues`)**：自動以 AST 掃描 staged `.py` 檔案匯入的第三方套件，比對 `pyproject.toml`，若有未記錄的套件會在提交時攔截並提示版本號。
+  4. **跨檔案與雙端規則同步檢查 (`find_rule_sync_issues`)**：
+     - 自動驗證根目錄 `pyproject.toml` 與 `.claude/rules/python-environment.md` 內嵌的 ` ```toml ` 區塊是否 100% 一致（讓 `python-environment.md` 可單獨攜帶至未來任何新專案直接還原 `pyproject.toml`）。
+     - 自動確保 `.agent/rules/` 僅保留單一 `AGENT.md` 入口，且 `.claude/rules/*.md` 下所有規則皆已同步索引於 `CLAUDE.md` 與 `.agent/rules/AGENT.md`。
 - **常用提交流程**：
   ```bash
   # 暫存變更並執行各項檢查、印出 diff 與草擬模板
@@ -212,3 +230,28 @@ conda activate ai-it-go
 python -m pytest
 ruff check .
 ```
+
+---
+
+## 6. 2026-10-17 任務執行與架構演進紀錄
+
+以下記錄本次 Session 完成的一連串環境建置、監控整合與規則架構重構歷程：
+
+1. **GitHub 儲存庫初始化與本機 Conda 環境建置**
+   - Clone `HachiTsai/AI_IT_Go` 至 `/Users/hachi/Git/AI_IT_Go`。
+   - 建立本機 Conda 環境 `ai-it-go`（Python 3.14.8），安裝核心套件並綁定 `.vscode/settings.json`。
+   - 移除 GitHub Repo 舊有的 Slack/Assistant 通知設定並驗證 Push 不再誤發舊通知。
+2. **GCP OAuth 2.0 認證與 Slack 雙重即時監控部署**
+   - 本機透過 Homebrew Cask 安裝 `gcloud-cli` (`589.0.0`) 與 `alpha`/`beta` 組件，改用 OAuth 2.0 ADC 授權並切換至 `Google-AI-Studio` (`gen-lang-client-0215358824`)，安全移除舊有 JSON 私鑰檔。
+   - 建立 Cloud Monitoring Alerting Policy 監控 Gemini API `429 Rate Limit`，串接 GCP 原生 Slack Channel 推播至 `#gcp_google-ai-studio`。
+   - 建立 `billing-alerts` Pub/Sub 主題與 Gen2 Cloud Function `billing-to-slack`（部署於 Always Free 免費區域 `us-central1`），綁定每月預算門檻（50%、90%、100%）自動推播彩色告警卡片至 Slack Webhook。
+3. **廢除 `requirements.txt` 並實作 `pyproject.toml` 單一依賴內嵌同步**
+   - 移除 `requirements.txt`，統一由 `pyproject.toml` 作為唯一 Python 依賴與工具設定來源。
+   - 將完整的 `pyproject.toml` 內嵌於 `python-environment.md` 規則檔中，使單一規則檔具備跨專案完整移植能力，並於 `committer.py` 實作雙向自動比對。
+4. **系統層級 CLI 工具盤點與獨立規範**
+   - 盤點本機 Homebrew / Conda 系統工具，補齊安裝 `uv` (`0.13.1`)，並建立獨立的 `system-cli-tools.md` 規則檔，將作業系統 CLI 工具與 Python 套件依賴清楚解耦。
+5. **收斂至 `.claude/` 單一真實來源與 `.agent/rules/AGENT.md` 轉接架構**
+   - 移除 `.git/hooks/pre-commit` 與交叉 Symlink，將所有模組化規則（`gcp-free-tier.md`、`system-cli-tools.md`、`python-environment.md`、`git-commit-workflow.md`）與技能統一收斂於 `.claude/` 下，全面採用 Claude 官方原生語法。
+   - 建立 `.agent/rules/AGENT.md` 作為 Antigravity 唯一導引入口，透過 `@[...]` 自動展開載入 `.claude/` 內所有規則與技能，並明訂「先通過 `pytest` 與 `ruff` 測試才可 Commit」之鐵律。
+   - 擴充 `committer.py`（`find_rule_sync_issues`）與單元測試 `test_committer.py`（共 14 項測試全數通過），自動防範 `.agent/rules/` 混入重複檔案或漏更新 `CLAUDE.md`／`AGENT.md` 索引。
+
