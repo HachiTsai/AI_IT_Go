@@ -2,12 +2,21 @@
 
 所有 Git 提交與推送操作一律透過 `.claude/skills/commit-workflow/scripts/committer.py` 執行，並遵循 [`.claude/skills/commit-workflow/SKILL.md`](../../.claude/skills/commit-workflow/SKILL.md) 規範：
 
-## 1. 自動提交流程原則
+## 1. 分支與 PR 鐵律
 
-- **任務完成主動提交（Auto-Commit on Completion）**：任何功能開發、重構、設定或規則變更完成，並在通過測試與品質驗證（`pytest` 與 `ruff`）後，**Agent 必須主動使用 `commit-workflow` 技能自動執行結構化提交與推送，無需等待使用者口令催促**。
+1. **先開 PR 再合併 `main`**：
+   - 所有變更（包括功能開發、重構、工具、文件與規範）都在指定的分支上 commit 並推送，向 `main` 發起 Pull Request。
+   - PR 的 GitHub Actions CI（`lint-and-tests`：`ruff check .` 與 `pytest`）全綠後才可合併，失敗需立刻修正。
+   - **禁止直接 push 到 `main` 分支**。
+2. **合併方式一律採用 Merge Commit**：
+   - 不使用 squash、不使用 rebase，保留分支上每個 commit 的完整訊息與歷程，便於以 `git log --grep` 追溯歷史決策。
+
+## 2. 自動提交流程原則
+
+- **任務完成主動提交（Auto-Commit on Completion）**：任何功能開發、重構、設定或規則變更完成，並在通過測試與品質驗證（`pytest` 與 `ruff`）後，**Agent 必須主動使用 `commit-workflow` 技能在分支上自動執行結構化提交與推送並發起 PR，無需等待使用者口令催促**。
 - **禁止隨意手動提交**：嚴禁使用 raw `git commit -m`，所有提交一律使用技能腳本，確保 Commit Message 符合 SSOT 結構化模板規範。
 
-## 2. 標準提交步驟
+## 3. 標準提交步驟
 
 1. **暫存與檢查**：
    ```bash
@@ -20,14 +29,16 @@
    python .claude/skills/commit-workflow/scripts/committer.py --message-file .git/COMMIT_MSG_TEMP --no-stage
    ```
 
-## 3. 安全防護與依賴防呆
+## 4. 安全防護與依賴防呆
 
 - **敏感檔案攔截**：暫存區若包含 `.env*`、憑證私鑰、`credentials.json` 等檔案，腳本將自動中止並阻擋提交（可加 `--allow-sensitive` 解除）。
 - **Python 依賴與規則同步攔截**：AST 自動分析暫存 Python 檔的 `import` 是否登記於 `pyproject.toml`，並驗證 `pyproject.toml` 與 `.claude/rules/python-environment.md` 是否 100% 同步（可加 `--allow-missing-deps` 略過）。
 
-## 4. 禁止事項
+## 5. 禁止事項
 
+- 嚴禁直接 push 到 `main` 分支，一律由 PR 經 CI 驗證全綠後以 Merge Commit 合併。
 - 禁止使用 `git commit -m` 傳遞多行訊息，一律使用 `--message-file`（內部呼叫 `git commit -F`）。
 - 禁止提交任何明文金鑰、OAuth 憑證或 `.env` 檔案。
 - 未經使用者明確同意，禁止執行 `git reset --hard`、`git rebase` 或 `git push --force`。
+
 

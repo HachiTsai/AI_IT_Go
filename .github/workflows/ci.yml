@@ -1,0 +1,22 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  lint-and-tests:
+    name: lint-and-tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: 安裝測試與代碼品質工具
+        run: python -m pip install pytest ruff
+      - name: Ruff 語法與品質檢查（ruff check .）
+        run: ruff check .
+      - name: Pytest 技能單元測試（pytest -q）
+        run: python -m pytest -q
