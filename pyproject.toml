@@ -1,0 +1,37 @@
+[project]
+name = "ai-it-go"
+version = "0.1.0"
+description = "AI IT 的修練場：實驗工具、驗證做法、累積可重複使用的技能（skills）與筆記"
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    # 核心
+    "pytest==9.1.1",
+    "requests==2.34.2",
+    "httpx==0.28.1",
+    "pydantic==2.14.1",
+    "python-dotenv==1.2.4",
+    "pyyaml==6.0.3",
+    "rich==15.0.0",
+    "typer==0.27.3",
+    # AI
+    "anthropic==1.13.0",
+    "mcp==2.3.0",
+    "tenacity==9.2.1",
+    "numpy==2.5.4",
+    "pandas==3.0.6",
+    # 品質工具
+    "ruff==0.17.0",
+    "pyright==1.1.414",
+]
+
+[tool.pytest.ini_options]
+testpaths = [".claude/skills/commit-workflow/scripts/tests"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py314"
+
+[tool.ruff.lint]
+select = ["E", "F", "W"]
+ignore = ["E501", "E741"]

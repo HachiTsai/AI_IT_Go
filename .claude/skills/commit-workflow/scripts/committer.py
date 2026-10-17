@@ -12,13 +12,16 @@ Modes:
 from __future__ import annotations
 
 import argparse
+import ast
 import fnmatch
+import importlib.metadata
 import re
 import subprocess
 import sys
 import time
+import tomllib
 from pathlib import Path
-from typing import List, Optional, Sequence
+from typing import List, Optional, Sequence, Set
 
 GIT_TIMEOUT_SEC = 60
 GIT_COMMIT_TIMEOUT_SEC = 300
@@ -100,6 +103,118 @@ def find_sensitive(files: Sequence[str]) -> List[str]:
         if any(fnmatch.fnmatch(name, p) or fnmatch.fnmatch(f, p) for p in SENSITIVE_PATTERNS):
             hits.append(f)
     return hits
+
+
+REQ_NAME_RE = re.compile(r"^\s*([A-Za-z0-9][A-Za-z0-9._-]*)")
+
+
+def normalize_pkg_name(name: str) -> str:
+    return re.sub(r"[-_.]+", "-", name).strip("-").lower()
+
+
+def parse_requirements_txt(path: Path) -> Set[str]:
+    pkgs: Set[str] = set()
+    if not path.is_file():
+        return pkgs
+    for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+        line = line.split("#", 1)[0].strip()
+        if not line or line.startswith("-"):
+            continue
+        m = REQ_NAME_RE.match(line)
+        if m:
+            pkgs.add(normalize_pkg_name(m.group(1)))
+    return pkgs
+
+
+def parse_pyproject_deps(path: Path) -> Set[str]:
+    pkgs: Set[str] = set()
+    if not path.is_file():
+        return pkgs
+    try:
+        data = tomllib.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return pkgs
+    proj = data.get("project") or {}
+    raw_lists = [proj.get("dependencies") or []]
+    for group in (proj.get("optional-dependencies") or {}).values():
+        if isinstance(group, list):
+            raw_lists.append(group)
+    for group in (data.get("dependency-groups") or {}).values():
+        if isinstance(group, list):
+            raw_lists.append([x for x in group if isinstance(x, str)])
+    for items in raw_lists:
+        for item in items:
+            m = REQ_NAME_RE.match(str(item))
+            if m:
+                pkgs.add(normalize_pkg_name(m.group(1)))
+    return pkgs
+
+
+def _local_module_names(repo_root: Path) -> Set[str]:
+    names: Set[str] = set()
+    skip_dirs = {".git", ".venv", "venv", "__pycache__", ".pytest_cache", "node_modules"}
+    for p in repo_root.rglob("*.py"):
+        if any(part in skip_dirs for part in p.parts):
+            continue
+        names.add(p.stem)
+        if p.parent != repo_root:
+            names.add(p.parent.name)
+    return names
+
+
+def find_dependency_issues(files: Sequence[str], repo_root: Path = Path(".")) -> List[str]:
+    """Check staged .py imports against requirements.txt / pyproject.toml, and manifest sync."""
+    req_path = repo_root / "requirements.txt"
+    pyproj_path = repo_root / "pyproject.toml"
+    has_req, has_pyproj = req_path.is_file(), pyproj_path.is_file()
+    if not has_req and not has_pyproj:
+        return []
+
+    req_pkgs = parse_requirements_txt(req_path)
+    pyproj_pkgs = parse_pyproject_deps(pyproj_path)
+    declared = req_pkgs | pyproj_pkgs
+    issues: List[str] = []
+
+    if has_req and has_pyproj:
+        for pkg in sorted(pyproj_pkgs - req_pkgs):
+            issues.append(f"{pkg}（僅在 pyproject.toml，未同步至 requirements.txt）")
+        for pkg in sorted(req_pkgs - pyproj_pkgs):
+            issues.append(f"{pkg}（僅在 requirements.txt，未同步至 pyproject.toml）")
+
+    py_files = [f for f in files if Path(f).suffix.lower() == ".py" and (repo_root / f).is_file()]
+    if not py_files:
+        return issues
+
+    local_mods = _local_module_names(repo_root)
+    stdlib_mods = getattr(sys, "stdlib_module_names", set()) | {"__future__"}
+    pkg_dists = importlib.metadata.packages_distributions()
+
+    for f in py_files:
+        try:
+            tree = ast.parse((repo_root / f).read_text(encoding="utf-8", errors="replace"), filename=f)
+        except SyntaxError:
+            continue
+        imported: Set[str] = set()
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                for alias in node.names:
+                    imported.add(alias.name.split(".")[0])
+            elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
+                imported.add(node.module.split(".")[0])
+
+        for mod in sorted(imported):
+            if mod in stdlib_mods or mod in local_mods:
+                continue
+            dists = pkg_dists.get(mod) or [mod]
+            if any(normalize_pkg_name(d) in declared for d in dists):
+                continue
+            dist = dists[0]
+            try:
+                spec = f"{dist}=={importlib.metadata.version(dist)}"
+            except importlib.metadata.PackageNotFoundError:
+                spec = dist
+            issues.append(f"{spec}（於 {f} 匯入 `{mod}`，未記錄於依賴檔）")
+    return issues
 
 
 def run_git_add(paths: Optional[List[str]] = None, exclude: Optional[List[str]] = None) -> bool:
@@ -244,6 +359,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     ap.add_argument("--stage-list", nargs="+", metavar="PATH", help="只暫存指定路徑")
     ap.add_argument("--exclude", nargs="+", metavar="PATH", help="git add . 後排除的路徑")
     ap.add_argument("--allow-sensitive", action="store_true", help="略過敏感檔案檢查")
+    ap.add_argument("--allow-missing-deps", action="store_true", help="略過未記錄套件與依賴檔同步檢查")
     args = ap.parse_args(argv)
 
     if args.message_file and args.auto_quick:
@@ -264,6 +380,12 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 print("   確認無誤請加 --allow-sensitive；否則 `git reset HEAD -- <path>` 移出暫存。", file=sys.stderr)
                 return 1
 
+        dep_issues = [] if args.allow_missing_deps else find_dependency_issues(files)
+        if dep_issues and (args.message_file or args.auto_quick):
+            print("❌ 發現未記錄或未同步的套件依賴，已中止：", *dep_issues, sep="\n   - ", file=sys.stderr)
+            print("   請先更新 requirements.txt / pyproject.toml 並暫存，或加 --allow-missing-deps 略過。", file=sys.stderr)
+            return 1
+
         message_file = args.message_file
         if args.auto_quick:
             if len(files) > AUTO_QUICK_FILE_SOFT_LIMIT:
@@ -273,6 +395,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
         if message_file is None:
             print(f"📋 Staged 檔案（{len(files)}）：\n   " + "\n   ".join(files))
+            if dep_issues:
+                print("\n⚠️ 發現未記錄或未同步的套件依賴：", *dep_issues, sep="\n   - ")
+                print("   提交時將會攔截，請先更新 requirements.txt / pyproject.toml 並重新暫存（或加 --allow-missing-deps）。")
             print("\n📊 統計：\n" + staged_stat())
             print("📝 Diff（已排除 *.json）：\n" + staged_diff())
             print("-" * 60 + "\n請依下列模板草擬訊息，寫入 .git/COMMIT_MSG_TEMP 後執行：")

@@ -6,7 +6,10 @@
 
 | 路徑 | 說明 |
 | :--- | :--- |
-| `.claude/skills/commit-workflow/` | 結構化 Git 提交流程 skill，含 `committer.py` 與測試 |
+| `.claude/skills/commit-workflow/` | 結構化 Git 提交流程 skill，含 `committer.py`（附敏感檔與依賴同步檢查）與測試 |
+| `CLAUDE.md` | 開發環境規範、套件同步規則與雲端萬用 Setup Script 模板 |
+| `pyproject.toml` / `requirements.txt` | Python 3.14 依賴設定與工具配置（支援 `uv add`） |
+| `scripts/init.sh` | 專案環境自動初始化腳本（GCP 認證與 `.venv` 建置） |
 
 ## 使用方式
 
