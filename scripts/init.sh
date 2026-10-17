@@ -31,3 +31,12 @@ if command -v uv >/dev/null 2>&1 && [ -z "$CONDA_DEFAULT_ENV" ]; then
     uv pip install --python .venv/bin/python -r pyproject.toml
   fi
 fi
+
+# 3) 自動掛載 Git pre-commit hook（確保繞過 committer.py 直接 git commit 時仍會檢查捷徑與依賴同步）
+if [ -d ".git/hooks" ]; then
+  cat > .git/hooks/pre-commit <<'HOOK'
+#!/bin/bash
+python3 .claude/skills/commit-workflow/scripts/committer.py --check-only
+HOOK
+  chmod +x .git/hooks/pre-commit
+fi

@@ -113,3 +113,20 @@ def test_manifest_sync_and_local_imports(repo):
     )
     assert c.find_dependency_issues(["app.py", "helper.py"], repo) == []
 
+
+def test_rule_symlink_and_claude_md_sync(repo):
+    rules_dir = repo / ".agent" / "rules"
+    rules_dir.mkdir(parents=True, exist_ok=True)
+    (rules_dir / "gcp-free-tier.md").write_text("# GCP\n")
+    claude_skills = repo / ".claude" / "skills"
+    claude_skills.mkdir(parents=True, exist_ok=True)
+    (repo / "CLAUDE.md").write_text("# Index\n")
+
+    issues = c.find_rule_sync_issues(repo)
+    assert len(issues) == 3
+
+    (repo / ".claude" / "rules").symlink_to("../.agent/rules")
+    (repo / ".agent" / "skills").symlink_to("../.claude/skills")
+    (repo / "CLAUDE.md").write_text("# Index\n- @[.agent/rules/gcp-free-tier.md]\n")
+    assert c.find_rule_sync_issues(repo) == []
+
