@@ -6,8 +6,10 @@
 
 | 路徑 | 說明 |
 | :--- | :--- |
+| `.agent/rules/` | 跨 Agent（Antigravity & Claude）模組化規則庫（含 GCP 免費額度、Python 依賴同步、提交流程規範） |
 | `.claude/skills/commit-workflow/` | 結構化 Git 提交流程 skill，含 `committer.py`（附敏感檔與依賴同步檢查）與測試 |
-| `CLAUDE.md` | 開發環境規範、套件同步規則與雲端萬用 Setup Script 模板 |
+| `CLAUDE.md` | 專案規範入口索引（自動引用 `.agent/rules/`） |
+| `doc/setup/agy_session.md` | Slack、GCP 與 GitHub 環境與監控完整配置指南 |
 | `pyproject.toml` / `requirements.txt` | Python 3.14 依賴設定與工具配置（支援 `uv add`） |
 | `scripts/init.sh` | 專案環境自動初始化腳本（GCP 認證與 `.venv` 建置） |
 
