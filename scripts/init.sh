@@ -8,14 +8,14 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 authenticate_gcp() {
   unset CLOUDSDK_AUTH_ACCESS_TOKEN
   if [ -n "$GCP_SA_KEY" ] && command -v gcloud >/dev/null 2>&1; then
-    if ! gcloud auth list --filter=status:ACTIVE --format='value(account)' 2>/dev/null | grep -q hachi-gcp; then
+    if ! gcloud auth list --filter=status:ACTIVE --format='value(account)' 2>/dev/null | grep -q "@"; then
       (
         umask 077
         key="$(mktemp)"
         trap 'rm -f "$key"' EXIT
         printf '%s' "$GCP_SA_KEY" > "$key"
         gcloud auth activate-service-account --key-file="$key" --quiet >/dev/null 2>&1
-        gcloud config set project hachi-gcp --quiet >/dev/null 2>&1
+        gcloud config set project gen-lang-client-0215358824 --quiet >/dev/null 2>&1
       )
     fi
   fi

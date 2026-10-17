@@ -49,28 +49,82 @@
 - **Claude 網頁版**：每次啟動為全新無頭 Linux 容器，啟動執行 Setup Script 時專案 Repo 尚未 clone 完成，且關閉對話即清空環境。
 - **Mac 本機**：持久化環境，適合使用使用者級 OAuth 授權，不需在硬碟放置私鑰檔。
 
-### 2.2 雲端環境萬用 Setup Script（延遲初始化）
-在 Claude 網頁版的「環境設定（Setup Script）」欄位貼上以下這段指令，任何語言與專案皆可通用：
+### 2.2 雲端環境完整 Setup Script（供直接貼入 Claude 網頁版「環境設定」）
+包含自動安裝 `uv`、自動安裝 Google Cloud SDK 與 `beta/alpha` 組件、切換為 `Google-AI-Studio` 專案，並安裝 Python 3.14 核心與 GCP 監控套件：
 
 ```bash
-cat >> ~/.bashrc <<'BASHRC'
-if [ -f "./scripts/init.sh" ]; then
-  _stamp="/tmp/.init_done_$(printf '%s' "$PWD" | tr '/' '_')"
-  if [ ! -f "$_stamp" ]; then
-    touch "$_stamp"
-    bash ./scripts/init.sh
+#!/bin/bash
+
+# 1) 自動安裝 uv（若容器未內建）
+if ! command -v uv >/dev/null 2>&1; then
+  curl -LsSf https://astral.sh/uv/install.sh | sh >/dev/null 2>&1
+  echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
+  export PATH="$HOME/.local/bin:$PATH"
+fi
+
+# 2) 自動安裝 Google Cloud CLI（若容器未內建）
+if ! command -v gcloud >/dev/null 2>&1; then
+  curl -fsSL https://sdk.cloud.google.com | bash --install-dir="$HOME" --disable-prompts >/dev/null 2>&1
+  echo 'source "$HOME/google-cloud-sdk/path.bash.inc"' >> ~/.bashrc
+  source "$HOME/google-cloud-sdk/path.bash.inc" 2>/dev/null || true
+fi
+
+# 3) GCP 認證：寫進 ~/.bashrc，切換為 Google-AI-Studio
+cat >> ~/.bashrc <<'EOF'
+unset CLOUDSDK_AUTH_ACCESS_TOKEN
+[ -f "$HOME/google-cloud-sdk/path.bash.inc" ] && source "$HOME/google-cloud-sdk/path.bash.inc"
+
+if [ -n "$GCP_SA_KEY" ] && command -v gcloud >/dev/null 2>&1; then
+  if ! gcloud auth list --filter=status:ACTIVE --format='value(account)' 2>/dev/null | grep -q "@"; then
+    umask 077; printf '%s' "$GCP_SA_KEY" > /tmp/sa.json
+    gcloud auth activate-service-account --key-file=/tmp/sa.json --quiet >/dev/null 2>&1
+    # 切換為 Google-AI-Studio 專案
+    gcloud config set project gen-lang-client-0215358824 --quiet >/dev/null 2>&1
+    rm -f /tmp/sa.json
   fi
 fi
-if [ -f "./.venv/bin/activate" ] && [ "$VIRTUAL_ENV" != "$PWD/.venv" ]; then
-  source "./.venv/bin/activate"
+EOF
+
+# 4) 安裝 gcloud beta/alpha 組件（監控與預算功能需要）
+if command -v gcloud >/dev/null 2>&1; then
+  gcloud components install beta alpha --quiet >/dev/null 2>&1 || true
 fi
-BASHRC
-[ -f "./scripts/init.sh" ] && source ~/.bashrc || true
+
+# 5) Python 3.14 虛擬環境與套件安裝
+uv venv --allow-existing --python 3.14 ~/.venv || true
+uv pip install --python ~/.venv/bin/python \
+  pytest==9.1.1 requests==2.34.2 httpx==0.28.1 pydantic==2.14.1 \
+  python-dotenv==1.2.4 pyyaml==6.0.3 rich==15.0.0 typer==0.27.3 \
+  anthropic==1.13.0 mcp==2.3.0 tenacity==9.2.1 numpy==2.5.4 \
+  pandas==3.0.6 ruff==0.17.0 pyright==1.1.414 \
+  functions-framework google-cloud-pubsub google-cloud-monitoring || true
+
+# 6) 自動啟用環境
+echo '[ -f ~/.venv/bin/activate ] && source ~/.venv/bin/activate' >> ~/.bashrc
+
+exit 0
 ```
 
-### 2.3 專案初始化腳本 (`scripts/init.sh`)
-- **GCP 服務帳號認證**：若環境變數存在 `GCP_SA_KEY`，使用 `umask 077` 與 `mktemp` 安全認證 `hachi-gcp`，並在結束時以 `trap` 立即刪除暫存私鑰檔。
-- **Python 虛擬環境**：若系統具備 `uv` 且未啟用 Conda，自動建置 Python 3.14 `.venv` 並安裝 `pyproject.toml` 依賴。
+### 2.3 專案初始化腳本 (`scripts/init.sh`) 與延遲觸發
+- **GCP 服務帳號認證**：若環境變數存在 `GCP_SA_KEY`，使用 `umask 077` 與 `mktemp` 安全認證 `Google-AI-Studio`，並在結束時以 `trap` 立即刪除暫存私鑰檔。
+- **Python 虛擬環境**：若系統具備 `uv` 且未啟用 Conda，自動建置 Python 3.14 `.venv` 並優先自 `pyproject.toml` 安裝依賴。
+- **延遲觸發（Lazy Init）機制**：
+  若希望 Setup Script 完全不寫死套件名稱，而是在進入專案目錄時自動觸發專案內的 `scripts/init.sh`，可採用以下寫入 `.bashrc` 的極簡模式：
+  ```bash
+  cat >> ~/.bashrc <<'BASHRC'
+  if [ -f "./scripts/init.sh" ]; then
+    _stamp="/tmp/.init_done_$(printf '%s' "$PWD" | tr '/' '_')"
+    if [ ! -f "$_stamp" ]; then
+      touch "$_stamp"
+      bash ./scripts/init.sh
+    fi
+  fi
+  if [ -f "./.venv/bin/activate" ] && [ "$VIRTUAL_ENV" != "$PWD/.venv" ]; then
+    source "./.venv/bin/activate"
+  fi
+  BASHRC
+  [ -f "./scripts/init.sh" ] && source ~/.bashrc || true
+  ```
 
 ---
 
