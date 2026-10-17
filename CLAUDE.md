@@ -3,6 +3,7 @@
 本專案的所有通用規則統一集中於 `.agent/rules/` 目錄下獨立管理（`.claude/rules` 已透過軟連結同步指向該目錄），Antigravity 與 Claude 皆須嚴格遵守：
 
 - **GCP 永久免費額度規範**：@[.agent/rules/gcp-free-tier.md](.agent/rules/gcp-free-tier.md)
+- **系統層級 CLI 工具規範**：@[.agent/rules/system-cli-tools.md](.agent/rules/system-cli-tools.md)
 - **Python 環境與套件同步規範**：@[.agent/rules/python-environment.md](.agent/rules/python-environment.md)
 - **Git 結構化提交流程規範**：@[.agent/rules/git-commit-workflow.md](.agent/rules/git-commit-workflow.md)
 
