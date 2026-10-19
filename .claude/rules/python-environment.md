@@ -42,13 +42,15 @@ dependencies = [
     "tenacity==9.2.1",
     "numpy==2.5.4",
     "pandas==3.0.6",
+    # GCP / 雲端服務
+    "functions-framework==3.10.2",
     # 品質工具
     "ruff==0.17.0",
     "pyright==1.1.414",
 ]
 
 [tool.pytest.ini_options]
-testpaths = [".claude/skills/commit-workflow/scripts/tests"]
+testpaths = [".claude/skills/commit-workflow/scripts/tests", "tests"]
 
 [tool.ruff]
 line-length = 120
