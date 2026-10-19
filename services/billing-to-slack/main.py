@@ -13,9 +13,8 @@ except ImportError:
 
     functions_framework = _DummyFramework()
 
-# 優先讀取環境變數 SLACK_WEBHOOK_URL，若未設定則 fallback 到預設網址
-DEFAULT_SLACK_WEBHOOK = "https://hooks.slack.com/services/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"
-SLACK_WEBHOOK_URL = os.environ.get("SLACK_WEBHOOK_URL", DEFAULT_SLACK_WEBHOOK)
+# Webhook 一律由環境變數 SLACK_WEBHOOK_URL 提供（部署時設定），程式碼不內嵌任何網址
+SLACK_WEBHOOK_URL = os.environ.get("SLACK_WEBHOOK_URL")
 
 
 def evaluate_billing_payload(data: dict):
@@ -85,6 +84,9 @@ def notify_slack(cloud_event):
     payload = evaluate_billing_payload(data)
     if payload is None:
         return
+
+    if not SLACK_WEBHOOK_URL:
+        raise RuntimeError("未設定環境變數 SLACK_WEBHOOK_URL，無法發送 Slack 通知")
 
     req = urllib.request.Request(
         SLACK_WEBHOOK_URL,

@@ -13,7 +13,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: "3.14"
       - name: 安裝測試與代碼品質工具
         run: python -m pip install pytest ruff functions-framework
       - name: Ruff 語法與品質檢查（ruff check .）
