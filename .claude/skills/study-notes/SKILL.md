@@ -15,10 +15,12 @@ metadata:
 
 ## 📋 存放路徑與架構規範
 
-- **本機 Google Drive 同步路徑**：
-  `/Users/hachi/Library/CloudStorage/GoogleDrive-hachi.tsai@gmail.com/我的雲端硬碟/00_Claude/Agent_Study_Notes/`
 - **雲端 Google Drive Folder ID**：
   `1Xlj49hpabV47WMzctSNS29_Vuuh6ddHn`
+- **儲存後端選擇**：
+  - 有 gdrive CLI（可用 `GDRIVE_BIN` 指定）：直接建立 Google 原生文件到 Drive。
+  - 沒有 gdrive CLI：只存到本機暫存 `~/.cache/agent_study_notes/`，不會同步到 Drive，並會顯示警告。
+  - 若要寫到本機同步資料夾，需明確設定 `AGENT_STUDY_NOTES_DIR`（注意：這樣寫入的是 `.md` 純文字，不是 Google 文件）。
 - **檔案格式鐵律**：
   - **預設一律採用 Google Docs (Google 文件 📄)**，禁止直接在雲端留存未轉換的裸 `.md` 文字檔。
   - 支援 Google Sheets (Google 試算表 📊，適用結構化數據與統計)。

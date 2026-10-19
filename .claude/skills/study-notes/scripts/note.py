@@ -17,16 +17,9 @@ import sys
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
-DEFAULT_LOCAL_PATH = (
-    Path.home()
-    / "Library"
-    / "CloudStorage"
-    / "GoogleDrive-hachi.tsai@gmail.com"
-    / "我的雲端硬碟"
-    / "00_Claude"
-    / "Agent_Study_Notes"
-)
 DEFAULT_FOLDER_ID = "1Xlj49hpabV47WMzctSNS29_Vuuh6ddHn"
+# 無 gdrive CLI 且未設定 AGENT_STUDY_NOTES_DIR 時的本機暫存位置（不會同步到 Google Drive）
+FALLBACK_CACHE_DIR = Path.home() / ".cache" / "agent_study_notes"
 
 # Google Workspace 原生 MIME 類型映射
 WORKSPACE_MIME_TYPES = {
@@ -68,6 +61,9 @@ def sanitize_filename(name: str) -> str:
 
 def find_gdrive_bin() -> Optional[str]:
     """尋找 gdrive CLI 執行檔路徑"""
+    env_bin = os.environ.get("GDRIVE_BIN")
+    if env_bin and os.access(env_bin, os.X_OK):
+        return env_bin
     custom_bin = Path.home() / ".gemini" / "antigravity" / "bin" / "gdrive"
     if custom_bin.exists() and os.access(custom_bin, os.X_OK):
         return str(custom_bin)
@@ -488,15 +484,12 @@ def select_backend() -> StorageBackend:
     if env_dir:
         return LocalStorageBackend(Path(env_dir))
 
-    if DEFAULT_LOCAL_PATH.exists() and DEFAULT_LOCAL_PATH.is_dir():
-        return LocalStorageBackend(DEFAULT_LOCAL_PATH)
-
-    fallback_dir = Path(".claude") / "notes"
+    # 不再自動寫入 Google Drive 同步資料夾：那裡的 .md 會以純文字上傳，而非 Google 原生文件
     print(
-        f"⚠️ 未偵測到 gdrive CLI，自動退回專案本地儲存: {fallback_dir}",
+        f"⚠️ 未偵測到 gdrive CLI，筆記只存本機暫存，不會同步到 Google Drive: {FALLBACK_CACHE_DIR}",
         file=sys.stderr,
     )
-    return LocalStorageBackend(fallback_dir)
+    return LocalStorageBackend(FALLBACK_CACHE_DIR)
 
 
 def main():

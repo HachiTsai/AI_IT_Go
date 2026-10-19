@@ -1,14 +1,20 @@
+import os
+import stat
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 import sys
 
 # 將 scripts 加入 sys.path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+import note
 from note import (
     sanitize_filename,
     LocalStorageBackend,
+    GDriveCliStorageBackend,
     get_current_repo_name,
+    select_backend,
 )
 
 
@@ -135,6 +141,44 @@ class TestStudyNotes(unittest.TestCase):
         # 驗證傳遞給 export 的是解析出來的 File ID 而非檔名
         called_args = gdrive._run_gdrive.call_args[0][0]
         self.assertEqual(called_args[2], "1xKaHde6soD1GhMg5HJ6C8QQmFe6VhWp8PKURbl-Axqc")
+
+
+class TestSelectBackend(unittest.TestCase):
+    def setUp(self):
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.cache_dir = Path(self.temp_dir.name) / "cache"
+        self.env_dir = Path(self.temp_dir.name) / "explicit"
+        cache_patch = patch.object(note, "FALLBACK_CACHE_DIR", self.cache_dir)
+        cache_patch.start()
+        self.addCleanup(cache_patch.stop)
+        self.addCleanup(self.temp_dir.cleanup)
+
+    def test_no_cli_no_env_uses_cache_not_drive(self):
+        with patch.object(note, "find_gdrive_bin", return_value=None), patch.dict(os.environ, {}, clear=True):
+            backend = select_backend()
+        self.assertIsInstance(backend, LocalStorageBackend)
+        self.assertEqual(backend.root_dir, self.cache_dir)
+        self.assertNotIn("CloudStorage", str(backend.root_dir))
+
+    def test_no_cli_with_env_dir_uses_explicit_dir(self):
+        env = {"AGENT_STUDY_NOTES_DIR": str(self.env_dir)}
+        with patch.object(note, "find_gdrive_bin", return_value=None), patch.dict(os.environ, env, clear=True):
+            backend = select_backend()
+        self.assertIsInstance(backend, LocalStorageBackend)
+        self.assertEqual(backend.root_dir, self.env_dir)
+
+    def test_cli_present_uses_gdrive_backend(self):
+        with patch.object(note, "find_gdrive_bin", return_value="/usr/bin/gdrive"), patch.dict(os.environ, {}, clear=True):
+            backend = select_backend()
+        self.assertIsInstance(backend, GDriveCliStorageBackend)
+
+    def test_find_gdrive_bin_honors_env_override(self):
+        with tempfile.NamedTemporaryFile(delete=False) as f:
+            fake_bin = f.name
+        self.addCleanup(os.unlink, fake_bin)
+        os.chmod(fake_bin, stat.S_IRWXU)
+        with patch.dict(os.environ, {"GDRIVE_BIN": fake_bin}, clear=True):
+            self.assertEqual(note.find_gdrive_bin(), fake_bin)
 
 
 if __name__ == "__main__":
