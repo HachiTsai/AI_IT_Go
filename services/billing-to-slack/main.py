@@ -2,7 +2,16 @@ import base64
 import json
 import os
 import urllib.request
-import functions_framework
+try:
+    import functions_framework
+except ImportError:
+    # 支援未安裝 functions_framework 的測試環境之 fallback
+    class _DummyFramework:
+        @staticmethod
+        def cloud_event(fn):
+            return fn
+
+    functions_framework = _DummyFramework()
 
 # 優先讀取環境變數 SLACK_WEBHOOK_URL，若未設定則 fallback 到預設網址
 DEFAULT_SLACK_WEBHOOK = "https://hooks.slack.com/services/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"
