@@ -27,6 +27,24 @@ def evaluate_billing_payload(data: dict):
 
     pct = (cost / budget * 100) if budget and budget > 0 else 0
 
+    # 預測門檻：只在預測花費達 100% 時通知；預測 50%／90% 的通知不發送
+    forecast = data.get("forecastThresholdExceeded")
+    if forecast is not None and forecast >= 1.0 and pct < 100:
+        return {
+            "text": f"📈 *【GCP 帳單預算：預測本月花費將達 100%】*\n• 預算名稱：{name}\n• 目前花費：{cost:.2f} {currency} ({pct:.1f}%)\n• 設定限額：{budget:.2f} {currency}",
+            "attachments": [
+                {
+                    "color": "#ff9900",
+                    "fields": [
+                        {"title": "預算名稱", "value": str(name), "short": True},
+                        {"title": "目前花費", "value": f"{cost:.2f} {currency}", "short": True},
+                        {"title": "消耗比例", "value": f"{pct:.1f}%", "short": True},
+                        {"title": "設定預算", "value": f"{budget:.2f} {currency}", "short": True},
+                    ],
+                }
+            ],
+        }
+
     # 門檻過濾：未達 50% 警報門檻不發送，避免平日每 30~60 分鐘定時計算洗版
     if pct < 50:
         print(f"目前花費比例 {pct:.1f}% 未達 50% 警報門檻，略過推播。")

@@ -75,6 +75,41 @@ class TestBillingAlert(unittest.TestCase):
         self.assertIn("100% 警戒", res["text"])
         self.assertEqual(res["attachments"][0]["color"], "#ff0000")
 
+    def test_forecast_100_percent_triggers_even_when_cost_low(self):
+        """預測達 100% 時，即使實際花費很低也應通知"""
+        data = {
+            "costAmount": 10.0,
+            "budgetAmount": 100.0,
+            "currencyCode": "TWD",
+            "budgetDisplayName": "每月預算",
+            "forecastThresholdExceeded": 1.0,
+        }
+        res = evaluate_billing_payload(data)
+        self.assertIsNotNone(res)
+        self.assertIn("預測本月花費將達 100%", res["text"])
+
+    def test_forecast_below_100_percent_is_skipped(self):
+        """預測僅達 50%／90% 且實際花費低時，應略過推播"""
+        for threshold in (0.5, 0.9):
+            data = {
+                "costAmount": 10.0,
+                "budgetAmount": 100.0,
+                "currencyCode": "TWD",
+                "forecastThresholdExceeded": threshold,
+            }
+            self.assertIsNone(evaluate_billing_payload(data))
+
+    def test_forecast_100_with_actual_over_100_uses_actual_alert(self):
+        """實際花費已達 100% 時，使用實際警戒訊息，不重複發預測訊息"""
+        data = {
+            "costAmount": 105.0,
+            "budgetAmount": 100.0,
+            "currencyCode": "TWD",
+            "forecastThresholdExceeded": 1.0,
+        }
+        res = evaluate_billing_payload(data)
+        self.assertIn("100% 警戒", res["text"])
+
 
 if __name__ == "__main__":
     unittest.main()
