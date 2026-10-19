@@ -6,6 +6,7 @@
 - **系統層級 CLI 工具規範**：@[.claude/rules/system-cli-tools.md](.claude/rules/system-cli-tools.md)
 - **Python 環境與套件同步規範**：@[.claude/rules/python-environment.md](.claude/rules/python-environment.md)
 - **Git 結構化提交流程規範**：@[.claude/rules/git-commit-workflow.md](.claude/rules/git-commit-workflow.md)
+- **跨專案通用學習筆記技能**：@[.claude/skills/study-notes/SKILL.md](.claude/skills/study-notes/SKILL.md)
 
 ## 開發、擴充與提交鐵律
 
