@@ -20,3 +20,5 @@ jobs:
         run: ruff check .
       - name: Pytest 技能單元測試（pytest -q）
         run: python -m pytest -q
+      - name: Study Notes 技能單元測試
+        run: python -m unittest discover -s .claude/skills/study-notes/scripts/tests -v
