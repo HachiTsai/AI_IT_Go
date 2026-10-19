@@ -204,7 +204,7 @@ gcloud auth application-default set-quota-project gen-lang-client-0215358824
 ```bash
 curl -X POST -H 'Content-type: application/json' \
   --data '{"text":"🔔 測試訊息"}' \
-  'https://hooks.slack.com/services/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'
+  'https://hooks.slack.com/services/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'
 ```
 
 ### 模擬發送預算警報至 Pub/Sub
