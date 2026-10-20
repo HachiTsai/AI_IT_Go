@@ -2,6 +2,7 @@
 """REPO管家 committer：跨 repo 的巡檢、提交前檢查與提交。僅用標準函式庫（需 Python 3.11+）。
 
 子命令：
+  sync   [--repo NAME] [--fetch-only]  安全拉取：fetch 後只做 fast-forward；有未提交變更、分叉、已併入 main 的分支一律不動，只回報
   patrol [--repo NAME] [--json]   巡檢實際環境（系統工具、各 repo 的 git 狀態、Python 版本、pyproject 與已安裝套件）
   check  REPO                     對該 repo 暫存區做提交前檢查（敏感檔、受保護分支、import 與 pyproject、規則檔同步）
   commit REPO --message-file F    check 通過後 git commit -F，預設 push（--no-push 可略過）
@@ -212,6 +213,66 @@ def cmd_patrol(a):
     return 1 if fails else 0
 
 
+
+# ---------- sync（安全 git pull）----------
+def git_out(repo: Path, *args, timeout=60):
+    return run(["git", *args], repo, timeout)
+
+
+def sync_path(repo: Path, default: str = "main", fetch_only: bool = False):
+    """fetch 後只做 --ff-only 快轉；絕不 rebase、reset、force，也不覆蓋未提交變更。"""
+    if not (repo / ".git").exists():
+        return [(FAIL, "repo", f"{repo} 不存在（先 clone）")]
+    code, o = git_out(repo, "fetch", "--prune", "origin", timeout=180)
+    if code != 0:
+        return [(FAIL, "fetch", o.splitlines()[-1][:160] if o else "失敗")]
+    rows = []
+    _, br = git_out(repo, "branch", "--show-current")
+    if not br:
+        return [(WARN, "分支", "detached HEAD，不拉取")]
+    _, st = git_out(repo, "status", "--porcelain")
+    dirty = bool(st)
+    code, up = git_out(repo, "rev-parse", "--abbrev-ref", "@{u}")
+    if code == 0:
+        _, ab = git_out(repo, "rev-list", "--left-right", "--count", "@{u}...HEAD")
+        behind, ahead = (int(x) for x in ab.split())
+        if behind == 0 and ahead == 0:
+            rows.append((OK, "同步", f"{br} 已是最新（{up}）"))
+        elif behind and ahead:
+            rows.append((FAIL, "分叉", f"{br} 與 {up} 分叉（落後 {behind}、領先 {ahead}）：請人工處理，不自動合併"))
+        elif ahead:
+            rows.append((WARN, "未推送", f"{br} 領先 {up} {ahead} 個 commit"))
+        elif dirty:
+            rows.append((WARN, "略過", f"有未提交變更，不拉取（落後 {behind} 個 commit）"))
+        elif fetch_only:
+            rows.append((WARN, "落後", f"{br} 落後 {up} {behind} 個 commit（--fetch-only 未快轉）"))
+        else:
+            code, o = git_out(repo, "merge", "--ff-only", "@{u}")
+            rows.append((OK, "快轉", f"{br} 已快轉 {behind} 個 commit") if code == 0 else (FAIL, "快轉", o.splitlines()[-1][:160]))
+    else:
+        rows.append((WARN, "upstream", f"{br} 沒有 upstream（首次推送請用 git push -u）"))
+    if br != default and git_out(repo, "rev-parse", "--verify", "-q", f"origin/{default}")[0] == 0:
+        if git_out(repo, "merge-base", "--is-ancestor", "HEAD", f"origin/{default}")[0] == 0:
+            rows.append((WARN, "分支已併入", f"{br} 已併入 {default}：請切回 {default} 並重新建分支，不要在舊分支上續做"))
+        else:
+            _, n = git_out(repo, "rev-list", "--count", f"HEAD..origin/{default}")
+            if n != "0":
+                rows.append((WARN, "落後 main", f"落後 origin/{default} {n} 個 commit：開 PR 前先 merge origin/{default}（不用 rebase）"))
+    return rows
+
+
+def cmd_sync(a):
+    cfg = load("repos.json")
+    bad = False
+    for n, rc in cfg["repos"].items():
+        if a.repo and n != a.repo:
+            continue
+        print(f"== {n}")
+        rows = sync_path(repo_path(cfg, n), rc.get("default_branch", "main"), a.fetch_only)
+        bad |= show(rows)
+    return 1 if bad else 0
+
+
 # ---------- check / commit ----------
 def staged(repo: Path):
     _, o = run(["git", "diff", "--cached", "--name-only", "--diff-filter=ACMR"], repo)
@@ -325,6 +386,10 @@ def main(argv=None):
     p.add_argument("--repo")
     p.add_argument("--json", action="store_true")
     p.set_defaults(f=cmd_patrol)
+    p = sp.add_parser("sync")
+    p.add_argument("--repo")
+    p.add_argument("--fetch-only", action="store_true")
+    p.set_defaults(f=cmd_sync)
     p = sp.add_parser("check")
     p.add_argument("repo")
     p.set_defaults(f=cmd_check)
