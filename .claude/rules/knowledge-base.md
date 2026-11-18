@@ -4,7 +4,7 @@
 
 - `knowledge/raw/`：原始來源，**唯讀**。Agent 只能讀取，不得新增、修改或刪除（已於 `.claude/settings.json` 以 `Edit(/knowledge/raw/**)` deny 規則限制，且由人手動放入）。
 - `knowledge/wiki/`：Agent 整理並維護的頁面；一檔一主題，檔名小寫加連字號（如 `tax-policy.md`）。
-- `doc/` 不屬於知識庫，維持原樣。
+- 原 `doc/` 已移入 `knowledge/wiki/`，不再保留。
 
 ## 2. wiki 頁面格式
 
