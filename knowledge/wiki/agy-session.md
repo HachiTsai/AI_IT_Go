@@ -1,3 +1,11 @@
+---
+title: Slack、GCP 與 GitHub 環境與監控配置指南（2026-10-17 紀錄）
+sources: []
+updated: 2026-11-18
+---
+
+> 注意：billing／budget／Slack 通知目前已不再使用，本頁為歷史紀錄。
+
 # Slack & GCP & GitHub 環境與監控完整配置指南
 
 > **建立日期**：2026-10-17  
@@ -204,7 +212,7 @@ gcloud auth application-default set-quota-project gen-lang-client-0215358824
 ```bash
 curl -X POST -H 'Content-type: application/json' \
   --data '{"text":"🔔 測試訊息"}' \
-  'https://hooks.slack.com/services/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'
+  '<SLACK_WEBHOOK_URL 已移除，勿寫入 git>'
 ```
 
 ### 模擬發送預算警報至 Pub/Sub
