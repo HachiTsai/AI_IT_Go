@@ -172,7 +172,7 @@ def jira_comment(date: str, results: list[dict], visible: list[str], generate: l
     ok = sum(r["ok"] for r in results)
     failed = [r["model"] for r in results if not r["ok"]]
     rows = [
-        f"*{date} 重測結果*（執行者：GitHub Actions）",
+        f"h4. {date} 重測結果（執行者：GitHub Actions）",
         "",
         f"* 測試 {len(results)} 個模型，{ok} 個可用，失敗 {len(results) - ok} 個"
         + (f"：{', '.join(failed)}" if failed else "") + "。",
