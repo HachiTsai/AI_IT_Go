@@ -1,0 +1,52 @@
+name: Gemini 模型每月重測
+
+# 每月 25 日台北 10:00（UTC 02:00）重測，並可手動觸發。
+# 修改本檔或腳本的 PR 只做 dry run：驗證金鑰、models.list 與 Jira 憑證，不呼叫 generateContent（避免花費）。
+on:
+  schedule:
+    - cron: "0 2 25 * *"
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - scripts/gemini_model_check.py
+      - .github/workflows/gemini-model-check.yml
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: gemini-model-check-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+      - name: 重測 23 個模型（PR 只做 dry run）
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          ATLASSIAN_EMAIL: ${{ secrets.ATLASSIAN_EMAIL }}
+          ATLASSIAN_API_TOKEN: ${{ secrets.ATLASSIAN_API }}
+        run: python scripts/gemini_model_check.py ${{ github.event_name == 'pull_request' && '--dry-run' || '' }}
+      - name: 開 PR 交給 Claude 審核
+        if: github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          DATE=$(TZ=Asia/Taipei date +%F)
+          BRANCH="gemini-check/${DATE}-${GITHUB_RUN_ID}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$BRANCH"
+          git add knowledge/raw data
+          git commit -m "docs(knowledge): Gemini 模型重測結果 ${DATE}" -m "由 GitHub Actions 自動產生（Jira HAC-11）。"
+          git push -u origin "$BRANCH"
+          gh pr create --base main --head "$BRANCH" \
+            --title "Gemini 模型重測結果 ${DATE}" \
+            --body "由 GitHub Actions 自動產生（Jira HAC-11）。待 Claude 審核：更新 knowledge/wiki/gemini-models.md 與 Drive 文件 gemini-model-check，推送後 CI 會在本 PR 執行。"
