@@ -10,7 +10,7 @@
 2. 一律在分支上開 PR 向 `main`，禁止直接 push `main`；CI 全綠後採 Merge Commit。
 3. 新增規則或技能時，更新 `CLAUDE.md` 的引用清單，並在本檔「規則摘要」補一行（`committer.py` 會檢查）。
 4. 嚴禁將金鑰、webhook 網址、個人資訊寫入 git。
-5. Jira（HAC）卡片規則見專案指示：完成工作要在對應卡留言或轉狀態，PR 標題帶卡號。
+5. Jira（HAC）只記「新知識擴展」與「新工具加入」（工具歸 Epic HAC-16）；一般任務由 PR、CI 與 GitHub issue 追蹤，不另開卡。
 
 ## 規則摘要（`.claude/rules/`）
 
