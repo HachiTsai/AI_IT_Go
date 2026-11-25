@@ -151,7 +151,7 @@ def protected_branch_issue(branch: str, protected=("main",)):
 def claude_without_rules_warning(files):
     """變更 .claude/ 卻沒有同步動到 rules 或索引時提醒（只警告）。"""
     touched = [f for f in files if f.startswith(".claude/") and not f.startswith(".claude/rules/")]
-    ruled = any(f.startswith(".claude/rules/") or f in ("CLAUDE.md", ".agent/rules/AGENT.md") for f in files)
+    ruled = any(f.startswith(".claude/rules/") or f in ("CLAUDE.md", "AGENTS.md") for f in files)
     return "變更了 .claude/ 但沒有動到 rules／索引：請確認已掃描 rules 是否需要更新" if touched and not ruled else None
 
 

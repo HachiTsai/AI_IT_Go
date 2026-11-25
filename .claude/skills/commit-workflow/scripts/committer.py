@@ -164,30 +164,25 @@ def _local_module_names(repo_root: Path) -> Set[str]:
 
 
 def find_rule_sync_issues(repo_root: Path = Path(".")) -> List[str]:
-    """Verify that .claude/rules/*.md are indexed in both CLAUDE.md and .agent/rules/AGENT.md."""
+    """Verify .claude/rules/*.md are indexed in CLAUDE.md, and AGENTS.md exists and points to CLAUDE.md."""
     issues: List[str] = []
     claude_rules = repo_root / ".claude" / "rules"
-    agent_rules = repo_root / ".agent" / "rules"
-    agent_md = agent_rules / "AGENT.md"
+    agents_md = repo_root / "AGENTS.md"
     claude_md = repo_root / "CLAUDE.md"
 
-    if agent_rules.is_dir():
-        extra_agent_files = [p.name for p in sorted(agent_rules.glob("*.md")) if p.name != "AGENT.md"]
-        if extra_agent_files:
-            issues.append(f".agent/rules/ 僅應保留 AGENT.md 單一入口，請將規則移至 .claude/rules/：{', '.join(extra_agent_files)}")
+    if (repo_root / ".agent").exists():
+        issues.append(".agent/ 已廢除，請移除並改用根目錄 AGENTS.md 指向 CLAUDE.md")
+    if agents_md.is_file():
+        if "CLAUDE.md" not in agents_md.read_text(encoding="utf-8", errors="replace"):
+            issues.append("AGENTS.md 必須指向 CLAUDE.md")
+    elif claude_md.is_file():
+        issues.append("缺少根目錄 AGENTS.md（Antigravity 入口，需指向 CLAUDE.md）")
 
-    if claude_rules.is_dir():
-        rule_files = sorted(claude_rules.glob("*.md"))
-        if claude_md.is_file():
-            claude_text = claude_md.read_text(encoding="utf-8", errors="replace")
-            for rf in rule_files:
-                if rf.name not in claude_text:
-                    issues.append(f".claude/rules/{rf.name} 尚未加入 CLAUDE.md 索引中")
-        if agent_md.is_file():
-            agent_text = agent_md.read_text(encoding="utf-8", errors="replace")
-            for rf in rule_files:
-                if rf.name not in agent_text:
-                    issues.append(f".claude/rules/{rf.name} 尚未加入 .agent/rules/AGENT.md 索引中")
+    if claude_rules.is_dir() and claude_md.is_file():
+        claude_text = claude_md.read_text(encoding="utf-8", errors="replace")
+        for rf in sorted(claude_rules.glob("*.md")):
+            if rf.name not in claude_text:
+                issues.append(f".claude/rules/{rf.name} 尚未加入 CLAUDE.md 索引中")
     return issues
 
 
@@ -429,7 +424,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         dep_issues = [] if args.allow_missing_deps else find_dependency_issues(files)
         if dep_issues and (args.message_file or args.auto_quick or args.check_only):
             print("❌ 發現未記錄或未同步的套件依賴／規則索引，已中止：", *dep_issues, sep="\n   - ", file=sys.stderr)
-            print("   請先同步更新 pyproject.toml、.claude/rules/、CLAUDE.md 與 .agent/rules/AGENT.md 並暫存，或加 --allow-missing-deps 略過。", file=sys.stderr)
+            print("   請先同步更新 pyproject.toml、.claude/rules/、CLAUDE.md（及 AGENTS.md）並暫存，或加 --allow-missing-deps 略過。", file=sys.stderr)
             return 1
 
         if args.check_only:

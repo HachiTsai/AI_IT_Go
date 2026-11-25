@@ -5,6 +5,7 @@ updated: 2026-11-18
 ---
 
 > 注意：billing／budget／Slack 通知目前已不再使用，本頁為歷史紀錄。
+> 2026-11-25 更新：Antigravity 入口已由 `.agent/rules/AGENT.md` 改為根目錄 `AGENTS.md`（指向 `CLAUDE.md`），下文的 `.agent/` 為當時舊架構。
 
 # Slack & GCP & GitHub 環境與監控完整配置指南
 
