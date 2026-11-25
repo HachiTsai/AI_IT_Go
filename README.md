@@ -8,7 +8,7 @@
 | :--- | :--- |
 | `.claude/rules/` | 唯一真實來源之模組化規則庫（含 GCP 免費額度、CLI 工具、Python 依賴同步、提交流程規範） |
 | `.claude/skills/commit-workflow/` | 結構化 Git 提交流程 skill，含 `committer.py`（附敏感檔、依賴與規則索引同步檢查）與測試 |
-| `.agent/rules/AGENT.md` | Antigravity 唯一導引入口，自動載入 `.claude/` 規則與技能並強制先測試後提交 |
+| `AGENTS.md` | Antigravity 轉接入口，指向 `CLAUDE.md`（規則索引唯一維護處）並提醒先測試後提交 |
 | `CLAUDE.md` | Claude 專案規範入口索引（自動引用 `.claude/rules/`） |
 | `knowledge/wiki/agy-session.md` | Slack、GCP 與 GitHub 環境與監控完整配置指南 |
 | `pyproject.toml` | Python 3.14 單一依賴來源與工具配置（與 `.claude/rules/python-environment.md` 同步） |

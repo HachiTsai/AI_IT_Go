@@ -114,22 +114,20 @@ def test_manifest_sync_and_local_imports(repo):
     assert c.find_dependency_issues(["app.py", "helper.py"], repo) == []
 
 
-def test_rule_index_sync_between_claude_and_agent_md(repo):
+def test_rule_index_sync_between_claude_and_agents_md(repo):
     claude_rules = repo / ".claude" / "rules"
     claude_rules.mkdir(parents=True, exist_ok=True)
     (claude_rules / "gcp-free-tier.md").write_text("# GCP\n")
-
-    agent_rules = repo / ".agent" / "rules"
-    agent_rules.mkdir(parents=True, exist_ok=True)
-    (agent_rules / "AGENT.md").write_text("# Bridge\n")
-    (agent_rules / "extra.md").write_text("# Duplicate\n")
     (repo / "CLAUDE.md").write_text("# Index\n")
+    (repo / ".agent").mkdir()
 
-    issues = c.find_rule_sync_issues(repo)
-    assert len(issues) == 3
+    # 缺 AGENTS.md、殘留 .agent/、CLAUDE.md 漏索引 → 3 項問題
+    assert len(c.find_rule_sync_issues(repo)) == 3
 
-    (agent_rules / "extra.md").unlink()
-    (agent_rules / "AGENT.md").write_text("# Bridge\n- @[.claude/rules/gcp-free-tier.md]\n")
+    (repo / ".agent").rmdir()
+    (repo / "AGENTS.md").write_text("# Bridge\n")  # 未指向 CLAUDE.md
     (repo / "CLAUDE.md").write_text("# Index\n- @[.claude/rules/gcp-free-tier.md]\n")
-    assert c.find_rule_sync_issues(repo) == []
+    assert c.find_rule_sync_issues(repo) == ["AGENTS.md 必須指向 CLAUDE.md"]
 
+    (repo / "AGENTS.md").write_text("- @[CLAUDE.md](CLAUDE.md)\n")
+    assert c.find_rule_sync_issues(repo) == []
