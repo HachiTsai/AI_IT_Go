@@ -46,7 +46,7 @@ def test_render_and_comment():
     md = g.render_markdown("2026-12-25", results, ["y"], ["y"], diff)
     assert "合計測試 2 個，可用 1 個，失敗 1 個。" in md
     assert "新增可見：`y`" in md and "不再出現：`x`" in md
-    comment = g.jira_comment("2026-12-25", results, ["y"], ["y"], diff)
+    comment = g.issue_comment("2026-12-25", results, ["y"], ["y"], diff)
     assert "失敗 1 個：m2" in comment
 
 
