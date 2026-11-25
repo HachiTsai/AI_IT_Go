@@ -88,14 +88,16 @@ def check_model(key: str, model: str, kind: str) -> dict:
     data = {"contents": [{"parts": [{"text": TEXT_PROMPT if kind == "text" else IMAGE_PROMPT}]}]}
     if kind == "image":
         data["generationConfig"] = {"responseModalities": ["TEXT", "IMAGE"]}
-    status, payload = 0, {}
-    for attempt in range(2):
+    result: dict = {}
+    for attempt in range(3):
         status, payload = _request(f"{API}/models/{model}:generateContent", data=data,
                                    headers={"x-goog-api-key": key})
-        if status == 200 or (status < 500 and status != 429):
+        result = evaluate(model, kind, status, payload)
+        # 成功、或非暫時性錯誤（4xx 且非 429）就停；影像偶爾只回文字，也重試
+        if result["ok"] or (status != 200 and status < 500 and status != 429):
             break
         time.sleep(5 * (attempt + 1))
-    return evaluate(model, kind, status, payload)
+    return result
 
 
 def evaluate(model: str, kind: str, status: int, payload: dict) -> dict:
