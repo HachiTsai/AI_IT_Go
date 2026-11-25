@@ -12,20 +12,19 @@ def test_evaluate_text_ok():
     assert r["ok"] and "OK" in r["note"]
 
 
-def test_evaluate_image_without_image_fails():
-    payload = {"candidates": [{"content": {"parts": [{"text": "sorry"}]}}]}
-    assert not g.evaluate("m", "image", 200, payload)["ok"]
-
-
-def test_evaluate_image_ok():
-    payload = {"candidates": [{"content": {"parts": [{"inlineData": {"data": "x"}}]}}]}
+def test_evaluate_response_without_text_counts():
+    payload = {"candidates": [{"finishReason": "MAX_TOKENS", "content": {}}]}
     r = g.evaluate("m", "image", 200, payload)
-    assert r["ok"] and r["note"] == "回傳 1 張圖片"
+    assert r["ok"] and "MAX_TOKENS" in r["note"]
+
+
+def test_evaluate_no_candidates_fails():
+    assert not g.evaluate("m", "image", 200, {})["ok"]
 
 
 def test_evaluate_http_error():
-    r = g.evaluate("m", "text", 404, {"error": {"message": "not found"}})
-    assert not r["ok"] and r["note"] == "not found"
+    r = g.evaluate("m", "text", 429, {"error": {"message": "rate limited"}})
+    assert not r["ok"] and r["note"] == "rate limited"
 
 
 def test_compare_added_removed():

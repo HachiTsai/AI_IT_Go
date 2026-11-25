@@ -1,6 +1,6 @@
 """Gemini 模型每月重測（Jira HAC-11）。
 
-對固定的一批文字與影像模型各做一次最小 generateContent，與上次可見模型清單比較，
+對固定的一批文字與影像模型各做一次最小 generateContent（只確認有回應，不生成圖片），與上次可見模型清單比較，
 寫出 knowledge/raw 來源檔，並可在 Jira HAC-11 留言。只用標準函式庫。
 
 環境變數：
@@ -45,8 +45,9 @@ IMAGE_MODELS = [
     "gemini-3-pro-image", "nano-banana-pro-preview", "gemini-2.5-flash-image",
     "gemini-nano-banana-2.1",
 ]
-TEXT_PROMPT = "Reply with exactly one word: OK"
-IMAGE_PROMPT = "Generate a tiny 64x64 solid red square image."
+# 只確認模型有回應，不要求生成圖片，並限制輸出長度以壓低費用
+PROMPT = "Reply with exactly one word: OK"
+MAX_OUTPUT_TOKENS = 8
 
 
 def _request(url: str, *, data: dict | None = None, headers: dict | None = None, timeout: int = 120):
@@ -85,15 +86,19 @@ def list_models(key: str) -> tuple[list[str], list[str]]:
 
 
 def check_model(key: str, model: str, kind: str) -> dict:
-    data = {"contents": [{"parts": [{"text": TEXT_PROMPT if kind == "text" else IMAGE_PROMPT}]}]}
+    data = {
+        "contents": [{"parts": [{"text": PROMPT}]}],
+        "generationConfig": {"maxOutputTokens": MAX_OUTPUT_TOKENS},
+    }
     if kind == "image":
-        data["generationConfig"] = {"responseModalities": ["TEXT", "IMAGE"]}
+        # 影像模型也只要求文字回覆，不生成圖片
+        data["generationConfig"]["responseModalities"] = ["TEXT"]
     result: dict = {}
     for attempt in range(3):
         status, payload = _request(f"{API}/models/{model}:generateContent", data=data,
                                    headers={"x-goog-api-key": key})
         result = evaluate(model, kind, status, payload)
-        # 成功、或非暫時性錯誤（4xx 且非 429）就停；影像偶爾只回文字，也重試
+        # 成功、或非暫時性錯誤（4xx 且非 429）就停
         if result["ok"] or (status != 200 and status < 500 and status != 429):
             break
         time.sleep(5 * (attempt + 1))
@@ -101,20 +106,21 @@ def check_model(key: str, model: str, kind: str) -> dict:
 
 
 def evaluate(model: str, kind: str, status: int, payload: dict) -> dict:
-    """依回應判斷是否可用（純函式，供測試）。"""
+    """HTTP 200 且有候選回應即視為可用（純函式，供測試）。"""
     result = {"model": model, "kind": kind, "status": status, "ok": False, "note": ""}
     if status != 200:
         result["note"] = payload.get("error", {}).get("message", "")[:120]
         return result
-    parts = [p for c in payload.get("candidates", []) for p in c.get("content", {}).get("parts", [])]
-    if kind == "text":
-        text = "".join(p.get("text", "") for p in parts).strip()
-        result["ok"] = bool(text)
-        result["note"] = f"回覆：{text[:20]}" if text else "沒有文字回覆"
+    candidates = payload.get("candidates", [])
+    parts = [p for c in candidates for p in c.get("content", {}).get("parts", [])]
+    text = "".join(p.get("text", "") for p in parts).strip()
+    result["ok"] = bool(candidates)
+    if text:
+        result["note"] = f"有回應：{text[:20]}"
+    elif candidates:
+        result["note"] = f"有回應（{candidates[0].get('finishReason', '無文字')}）"
     else:
-        images = sum(1 for p in parts if "inlineData" in p)
-        result["ok"] = images > 0
-        result["note"] = f"回傳 {images} 張圖片" if images else "沒有回傳圖片"
+        result["note"] = "沒有回應"
     return result
 
 
@@ -135,7 +141,7 @@ def render_markdown(date: str, results: list[dict], visible: list[str], generate
         f"# Gemini 金鑰可用模型檢查（{date}）",
         "",
         "- 執行者：GitHub Actions（scripts/gemini_model_check.py，金鑰未寫入本檔）",
-        f"- 測試方式：`models.list` 取得清單後，對同一批 {len(results)} 個文字與影像模型各做一次最小 `generateContent` 呼叫",
+        f"- 測試方式：`models.list` 取得清單後，對同一批 {len(results)} 個文字與影像模型各做一次最小 `generateContent` 呼叫，只確認有回應（影像模型不生成圖片，輸出上限 {MAX_OUTPUT_TOKENS} tokens）",
         "",
         "## 結果",
         "",
