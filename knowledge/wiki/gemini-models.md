@@ -3,6 +3,7 @@ title: Gemini 模型可用性（2026-11-14 檢查）
 sources:
   - knowledge/raw/gemini-model-check-summary.md
   - knowledge/raw/gemini-model-check-2026-11-25.md
+  - knowledge/raw/gemini-model-check-2026-11-25-2.md
 updated: 2026-11-25
 ---
 
@@ -31,6 +32,16 @@ updated: 2026-11-25
 > "新增可見：`gemini-4-neon`（尚未測試）。" — knowledge/raw/gemini-model-check-2026-11-25.md
 
 > "不再出現：`deep-research-pro-preview-12-2025`。" — knowledge/raw/gemini-model-check-2026-11-25.md
+
+## 2026-11-25 GitHub Actions 實測
+
+每月重測改由 GitHub Actions 執行（每月 25 日），測試方式簡化為只確認有回應。
+
+> "只確認有回應（影像模型不生成圖片，輸出上限 8 tokens）" — knowledge/raw/gemini-model-check-2026-11-25-2.md
+
+> "合計測試 23 個，可用 23 個，失敗 0 個。" — knowledge/raw/gemini-model-check-2026-11-25-2.md
+
+> "新增可見：無。" — knowledge/raw/gemini-model-check-2026-11-25-2.md
 
 ## 維護
 
