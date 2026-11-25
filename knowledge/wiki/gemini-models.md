@@ -1,0 +1,28 @@
+---
+title: Gemini 模型可用性（2026-11-14 檢查）
+sources:
+  - knowledge/raw/gemini-model-check-summary.md
+updated: 2026-11-25
+---
+
+# Gemini 模型可用性
+
+最近一次檢查在 2026-11-14，結果全數通過；每月重測一次（Jira HAC-11）。與 GCP 費用相關的限制見 [[gcp-free-tier]]。
+
+> "測試 23 個文字與影像模型，23 個可用，失敗 0 個。" — knowledge/raw/gemini-model-check-summary.md
+
+## 測試方法
+
+> "文字與影像系列各做一次最小 generateContent 呼叫。" — knowledge/raw/gemini-model-check-summary.md
+
+## 結果摘要
+
+- 文字模型 16 個，全部回覆 OK：Gemini 4、3.x Flash、3.x Lite、3.1 Pro、2.5 系列與兩個 latest 別名。
+- 影像模型 7 個，全部回傳 1 張圖片。
+- 與 2026-10-14 紀錄中的 6 個模型比較，全部仍可用。
+
+> "金鑰共可見 64 個模型，其中 49 個支援 generateContent。" — knowledge/raw/gemini-model-check-summary.md
+
+## 維護
+
+> "Drive 上有同名 Google 文件副本，更新任一份時另一份也要同步。" — knowledge/raw/gemini-model-check-summary.md
