@@ -2,6 +2,7 @@
 title: Gemini 模型可用性（2026-11-14 檢查）
 sources:
   - knowledge/raw/gemini-model-check-summary.md
+  - knowledge/raw/gemini-model-check-2026-11-25.md
 updated: 2026-11-25
 ---
 
@@ -22,6 +23,14 @@ updated: 2026-11-25
 - 與 2026-10-14 紀錄中的 6 個模型比較，全部仍可用。
 
 > "金鑰共可見 64 個模型，其中 49 個支援 generateContent。" — knowledge/raw/gemini-model-check-summary.md
+
+## 2026-11-25 重測
+
+> "合計測試 23 個，可用 23 個，失敗 0 個。" — knowledge/raw/gemini-model-check-2026-11-25.md
+
+> "新增可見：`gemini-4-neon`（尚未測試）。" — knowledge/raw/gemini-model-check-2026-11-25.md
+
+> "不再出現：`deep-research-pro-preview-12-2025`。" — knowledge/raw/gemini-model-check-2026-11-25.md
 
 ## 維護
 
