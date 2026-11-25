@@ -9,7 +9,7 @@ updated: 2026-11-25
 
 # Gemini 模型可用性
 
-最近一次檢查在 2026-11-14，結果全數通過；每月重測一次（Jira HAC-11）。與 GCP 費用相關的限制見 [[gcp-free-tier]]。
+最近一次檢查在 2026-11-14，結果全數通過；每月重測一次（GitHub Actions，結果回報在 issue #23；Jira HAC-11 已於 2026-11-25 退場）。與 GCP 費用相關的限制見 [[gcp-free-tier]]。
 
 > "測試 23 個文字與影像模型，23 個可用，失敗 0 個。" — knowledge/raw/gemini-model-check-summary.md
 

@@ -1,21 +1,20 @@
-"""Gemini 模型每月重測（Jira HAC-11）。
+"""Gemini 模型每月重測（結果回報在 GitHub issue #23）。
 
 對固定的一批文字與影像模型各做一次最小 generateContent（只確認有回應，不生成圖片），與上次可見模型清單比較，
-寫出 knowledge/raw 來源檔，並可在 Jira HAC-11 留言。只用標準函式庫。
+寫出 knowledge/raw 來源檔，並把留言內容寫到 GITHUB_COMMENT_FILE 指定的檔案（由 Actions 貼到 issue #23）。只用標準函式庫。
 
 環境變數：
 - GEMINI_API_KEY（或 Gemini_API）：Gemini 金鑰，必填
-- ATLASSIAN_EMAIL、ATLASSIAN_API_TOKEN：Jira 留言用，缺少時略過 Jira
+- GITHUB_COMMENT_FILE：選填，留言內容（Markdown）的輸出路徑
 
 用法：
-    python scripts/gemini_model_check.py --dry-run   # 只驗證金鑰、models.list 與 Jira 憑證，不呼叫 generateContent
-    python scripts/gemini_model_check.py             # 寫檔並在 HAC-11 留言
+    python scripts/gemini_model_check.py --dry-run   # 只驗證金鑰與 models.list，不呼叫 generateContent
+    python scripts/gemini_model_check.py             # 寫檔並產生留言內容
 """
 
 from __future__ import annotations
 
 import argparse
-import base64
 import datetime as dt
 import json
 import os
@@ -29,8 +28,6 @@ ROOT = Path(__file__).resolve().parent.parent
 STATE_FILE = ROOT / "data" / "gemini-visible-models.json"
 RAW_DIR = ROOT / "knowledge" / "raw"
 API = "https://generativelanguage.googleapis.com/v1beta"
-JIRA_SITE = "https://hachitsai.atlassian.net"
-JIRA_ISSUE = "HAC-11"
 TZ = dt.timezone(dt.timedelta(hours=8))
 
 TEXT_MODELS = [
@@ -167,22 +164,22 @@ def render_markdown(date: str, results: list[dict], visible: list[str], generate
     return "\n".join(lines) + "\n"
 
 
-def jira_comment(date: str, results: list[dict], visible: list[str], generate: list[str], diff: dict) -> str:
-    """Jira wiki markup 留言（REST API v2）。"""
+def issue_comment(date: str, results: list[dict], visible: list[str], generate: list[str], diff: dict) -> str:
+    """貼到 GitHub issue #23 的 Markdown 留言。"""
     ok = sum(r["ok"] for r in results)
     failed = [r["model"] for r in results if not r["ok"]]
     rows = [
-        f"h4. {date} 重測結果（執行者：GitHub Actions）",
+        f"#### {date} 重測結果（執行者：GitHub Actions）",
         "",
-        f"* 測試 {len(results)} 個模型，{ok} 個可用，失敗 {len(results) - ok} 個"
+        f"- 測試 {len(results)} 個模型，{ok} 個可用，失敗 {len(results) - ok} 個"
         + (f"：{', '.join(failed)}" if failed else "") + "。",
-        f"* 金鑰可見 {len(visible)} 個模型，其中 {len(generate)} 個支援 generateContent。",
+        f"- 金鑰可見 {len(visible)} 個模型，其中 {len(generate)} 個支援 generateContent。",
     ]
     if diff["prev_visible_count"]:
-        rows.append("* 新增可見：" + (", ".join(diff["added"]) or "無"))
-        rows.append("* 不再出現：" + (", ".join(diff["removed"]) or "無"))
-    rows.append("* 完整結果：knowledge/raw 新增的 gemini-model-check 檔（PR 待 Claude 審核並同步 wiki 與 Drive）")
-    return "\n".join(rows)
+        rows.append("- 新增可見：" + (", ".join(diff["added"]) or "無"))
+        rows.append("- 不再出現：" + (", ".join(diff["removed"]) or "無"))
+    rows.append("- 完整結果：knowledge/raw 新增的 gemini-model-check 檔（PR 待 Claude 審核並同步 wiki 與 Drive）")
+    return "\n".join(rows) + "\n"
 
 
 def raw_path(raw_dir: Path, date: str) -> Path:
@@ -195,17 +192,9 @@ def raw_path(raw_dir: Path, date: str) -> Path:
     return out
 
 
-def _jira_headers() -> dict | None:
-    email, token = os.environ.get("ATLASSIAN_EMAIL"), os.environ.get("ATLASSIAN_API_TOKEN")
-    if not (email and token):
-        return None
-    auth = base64.b64encode(f"{email}:{token}".encode()).decode()
-    return {"Authorization": f"Basic {auth}", "Accept": "application/json"}
-
-
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--dry-run", action="store_true", help="只驗證金鑰、models.list 與 Jira 憑證，不呼叫 generateContent")
+    parser.add_argument("--dry-run", action="store_true", help="只驗證金鑰與 models.list，不呼叫 generateContent")
     parser.add_argument("--date", default=dt.datetime.now(TZ).date().isoformat())
     args = parser.parse_args(argv)
 
@@ -213,13 +202,6 @@ def main(argv: list[str] | None = None) -> int:
     if not key:
         print("缺少 GEMINI_API_KEY", file=sys.stderr)
         return 2
-    jira = _jira_headers()
-    print(f"Jira 憑證：{'已設定' if jira else '未設定（略過留言）'}")
-    if jira:
-        status, me = _request(f"{JIRA_SITE}/rest/api/2/myself", headers=jira)
-        print(f"Jira 驗證：HTTP {status}")
-        if status != 200:
-            jira = None
 
     visible, generate = list_models(key)
     if args.dry_run:
@@ -249,13 +231,10 @@ def main(argv: list[str] | None = None) -> int:
     STATE_FILE.write_text(json.dumps({"date": args.date, "visible": visible, "generate": generate},
                                      ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print(f"已寫入 {out.relative_to(ROOT)}")
-    if jira:
-        status, _ = _request(f"{JIRA_SITE}/rest/api/2/issue/{JIRA_ISSUE}/comment",
-                             data={"body": jira_comment(args.date, results, visible, generate, diff)},
-                             headers=jira)
-        print(f"Jira 留言：HTTP {status}")
-        if status not in (200, 201):
-            return 1
+    comment_file = os.environ.get("GITHUB_COMMENT_FILE")
+    if comment_file:
+        Path(comment_file).write_text(issue_comment(args.date, results, visible, generate, diff), encoding="utf-8")
+        print(f"已寫入留言內容 {comment_file}")
     return 0
 
 
