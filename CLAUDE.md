@@ -7,6 +7,7 @@
 - **Python 環境與套件同步規範**：@[.claude/rules/python-environment.md](.claude/rules/python-environment.md)
 - **Git 結構化提交流程規範**：@[.claude/rules/git-commit-workflow.md](.claude/rules/git-commit-workflow.md)
 - **知識庫（knowledge/）作業規範**：@[.claude/rules/knowledge-base.md](.claude/rules/knowledge-base.md)
+- **專案提示、開 PR 與 issue 附圖規範**：@[.claude/rules/project-workflow.md](.claude/rules/project-workflow.md)
 - **跨專案通用學習筆記技能**：@[.claude/skills/study-notes/SKILL.md](.claude/skills/study-notes/SKILL.md)
 
 ## 開發、擴充與提交鐵律
