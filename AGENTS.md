@@ -18,5 +18,5 @@
 - [system-cli-tools.md](.claude/rules/system-cli-tools.md)：系統層級 CLI 工具清單、路徑與安裝指令（`gcloud`、`gh`、`uv`、`rg`、`fd` 等）。
 - [python-environment.md](.claude/rules/python-environment.md)：以 `pyproject.toml` 為唯一依賴來源，新增套件須同步更新該規則檔內的 toml 區塊。
 - [git-commit-workflow.md](.claude/rules/git-commit-workflow.md)：提交一律用 `committer.py --message-file`，不手動 `git commit -m`；PR 經 CI 全綠後以 Merge Commit 合併。
-- [project-workflow.md](.claude/rules/project-workflow.md)：新 session 先 `git pull --ff-only`；Drive 輸出用 Google 文件（截圖資料夾例外）；PR 先開草稿並設 assignee；問題截圖存 Drive `tmp/screenshot` 後在 issue 貼連結，不 commit 圖片。
+- [project-workflow.md](.claude/rules/project-workflow.md)：新 session 先 `git pull --ff-only`；Drive 輪詢不進標記「no open」的資料夾；PR 先開草稿並設 assignee；問題截圖存 Drive `tmp/screenshot` 後在 issue 貼連結，不 commit 圖片。
 - [knowledge-base.md](.claude/rules/knowledge-base.md)：`knowledge/wiki/` 頁面需 front matter 與逐字引用，修改後跑 `python scripts/knowledge_lint.py`；`knowledge/raw/` 只放無敏感資訊的來源，改既有檔須先經 hachi 同意。

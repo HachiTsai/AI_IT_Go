@@ -6,8 +6,7 @@
 
 1. **開新 session 先安全同步**：先執行 `git pull --ff-only`（或 `committer.py --sync`），只做 fast-forward。
 2. **Drive 資料夾輪詢**：嚴禁進入標記「no open」的資料夾。
-3. **輸出到 Google Drive 一律用 Google Workspace 文件**（Docs／Sheets／Slides）。唯一例外：hachi 指定的截圖資料夾（見第 3 節），可存 PNG。
-4. **嚴禁敏感資訊入庫**：金鑰、webhook 網址、個人資訊不得寫入 git 追蹤的檔案。
+3. **嚴禁敏感資訊入庫**：金鑰、webhook 網址、個人資訊不得寫入 git 追蹤的檔案。
 
 ## 2. 開 PR 流程
 
