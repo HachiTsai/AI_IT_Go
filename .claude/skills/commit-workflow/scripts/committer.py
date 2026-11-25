@@ -164,7 +164,7 @@ def _local_module_names(repo_root: Path) -> Set[str]:
 
 
 def find_rule_sync_issues(repo_root: Path = Path(".")) -> List[str]:
-    """Verify .claude/rules/*.md are indexed in CLAUDE.md, and AGENTS.md exists and points to CLAUDE.md."""
+    """Verify .claude/rules/*.md are indexed in CLAUDE.md and summarized in AGENTS.md, and AGENTS.md exists and points to CLAUDE.md."""
     issues: List[str] = []
     claude_rules = repo_root / ".claude" / "rules"
     agents_md = repo_root / "AGENTS.md"
@@ -172,8 +172,10 @@ def find_rule_sync_issues(repo_root: Path = Path(".")) -> List[str]:
 
     if (repo_root / ".agent").exists():
         issues.append(".agent/ 已廢除，請移除並改用根目錄 AGENTS.md 指向 CLAUDE.md")
+    agents_text = ""
     if agents_md.is_file():
-        if "CLAUDE.md" not in agents_md.read_text(encoding="utf-8", errors="replace"):
+        agents_text = agents_md.read_text(encoding="utf-8", errors="replace")
+        if "CLAUDE.md" not in agents_text:
             issues.append("AGENTS.md 必須指向 CLAUDE.md")
     elif claude_md.is_file():
         issues.append("缺少根目錄 AGENTS.md（Antigravity 入口，需指向 CLAUDE.md）")
@@ -183,6 +185,8 @@ def find_rule_sync_issues(repo_root: Path = Path(".")) -> List[str]:
         for rf in sorted(claude_rules.glob("*.md")):
             if rf.name not in claude_text:
                 issues.append(f".claude/rules/{rf.name} 尚未加入 CLAUDE.md 索引中")
+            if agents_md.is_file() and rf.name not in agents_text:
+                issues.append(f".claude/rules/{rf.name} 尚未加入 AGENTS.md 規則摘要")
     return issues
 
 
