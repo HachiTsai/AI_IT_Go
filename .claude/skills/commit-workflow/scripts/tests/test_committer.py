@@ -127,7 +127,13 @@ def test_rule_index_sync_between_claude_and_agents_md(repo):
     (repo / ".agent").rmdir()
     (repo / "AGENTS.md").write_text("# Bridge\n")  # 未指向 CLAUDE.md
     (repo / "CLAUDE.md").write_text("# Index\n- @[.claude/rules/gcp-free-tier.md]\n")
-    assert c.find_rule_sync_issues(repo) == ["AGENTS.md 必須指向 CLAUDE.md"]
+    assert c.find_rule_sync_issues(repo) == [
+        "AGENTS.md 必須指向 CLAUDE.md",
+        ".claude/rules/gcp-free-tier.md 尚未加入 AGENTS.md 規則摘要",
+    ]
 
-    (repo / "AGENTS.md").write_text("- @[CLAUDE.md](CLAUDE.md)\n")
+    (repo / "AGENTS.md").write_text("- @[CLAUDE.md](CLAUDE.md)\n")  # 未摘要規則
+    assert c.find_rule_sync_issues(repo) == [".claude/rules/gcp-free-tier.md 尚未加入 AGENTS.md 規則摘要"]
+
+    (repo / "AGENTS.md").write_text("- @[CLAUDE.md](CLAUDE.md)\n- gcp-free-tier.md：摘要\n")
     assert c.find_rule_sync_issues(repo) == []
