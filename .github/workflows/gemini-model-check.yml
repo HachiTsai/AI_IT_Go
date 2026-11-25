@@ -37,7 +37,8 @@ jobs:
       - name: 開 PR 交給 Claude 審核
         if: github.event_name != 'pull_request'
         env:
-          GH_TOKEN: ${{ github.token }}
+          # 預設 GITHUB_TOKEN 不能開 PR（repo 設定未開放），改用 PAT；PAT 開的 PR 也會觸發 CI
+          GH_TOKEN: ${{ secrets.AUTO_MERGE_PAT || github.token }}
         run: |
           DATE=$(TZ=Asia/Taipei date +%F)
           BRANCH="gemini-check/${DATE}-${GITHUB_RUN_ID}"
