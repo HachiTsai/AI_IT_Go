@@ -53,3 +53,9 @@ def test_render_and_comment():
 
 def test_model_list_size():
     assert len(g.TEXT_MODELS) == 16 and len(g.IMAGE_MODELS) == 7
+
+
+def test_raw_path_does_not_overwrite(tmp_path):
+    assert g.raw_path(tmp_path, "2026-11-25").name == "gemini-model-check-2026-11-25.md"
+    (tmp_path / "gemini-model-check-2026-11-25.md").write_text("x")
+    assert g.raw_path(tmp_path, "2026-11-25").name == "gemini-model-check-2026-11-25-2.md"

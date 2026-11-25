@@ -173,8 +173,18 @@ def jira_comment(date: str, results: list[dict], visible: list[str], generate: l
     if diff["prev_visible_count"]:
         rows.append("* 新增可見：" + (", ".join(diff["added"]) or "無"))
         rows.append("* 不再出現：" + (", ".join(diff["removed"]) or "無"))
-    rows.append(f"* 完整結果：knowledge/raw/gemini-model-check-{date}.md（PR 待 Claude 審核並同步 wiki 與 Drive）")
+    rows.append("* 完整結果：knowledge/raw 新增的 gemini-model-check 檔（PR 待 Claude 審核並同步 wiki 與 Drive）")
     return "\n".join(rows)
+
+
+def raw_path(raw_dir: Path, date: str) -> Path:
+    """回傳不覆蓋既有來源檔的路徑（同日已有檔案時加上 -2、-3…）。"""
+    out = raw_dir / f"gemini-model-check-{date}.md"
+    n = 2
+    while out.exists():
+        out = raw_dir / f"gemini-model-check-{date}-{n}.md"
+        n += 1
+    return out
 
 
 def _jira_headers() -> dict | None:
@@ -223,7 +233,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.dry_run:
         return 0
 
-    out = RAW_DIR / f"gemini-model-check-{args.date}.md"
+    out = raw_path(RAW_DIR, args.date)
     out.write_text(render_markdown(args.date, results, visible, generate, diff), encoding="utf-8")
     STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
     STATE_FILE.write_text(json.dumps({"date": args.date, "visible": visible, "generate": generate},
