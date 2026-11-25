@@ -11,3 +11,4 @@ updated: 2026-11-18
 - [[agy-session]]：Slack、GCP 與 GitHub 環境配置的歷史紀錄
 - [[gemini-models]]：Gemini 模型可用性檢查（2026-11-14）
 - [[gcp-free-tier]]：GCP 永久免費額度作業規格
+- [[colab-integration]]：Colab CLI 與 MCP 連接評估

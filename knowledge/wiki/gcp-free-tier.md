@@ -2,6 +2,7 @@
 title: GCP 永久免費額度作業規格
 sources:
   - knowledge/raw/gcp-free-tier-spec.md
+  - knowledge/raw/gcp-free-tier-audit-2026-11-25.md
 updated: 2026-11-25
 ---
 
@@ -23,6 +24,14 @@ updated: 2026-11-25
 - Artifact Registry：500 MB 以內。
 - Secret Manager：有效版本 6 個以內。
 - Pub/Sub：每月前 10 GB 免費。
+
+## 2026-11-25 對照檢查
+
+> "不符：規格要求 max-instances 為 1" — knowledge/raw/gcp-free-tier-audit-2026-11-25.md
+
+目前唯一的函式 billing-to-slack 實例上限為 100，已不符規格；其餘可驗證項目符合。
+
+> "服務帳號權限不足，無法檢查 Compute Engine、Cloud Storage 與 Pub/Sub，這三項需要有權限的帳號或到主控台確認。" — knowledge/raw/gcp-free-tier-audit-2026-11-25.md
 
 ## 執行前護欄
 
