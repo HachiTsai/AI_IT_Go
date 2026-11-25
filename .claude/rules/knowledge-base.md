@@ -2,7 +2,10 @@
 
 ## 1. 結構
 
-- `knowledge/raw/`：原始來源，**唯讀**。Agent 只能讀取，不得新增、修改或刪除（已於 `.claude/settings.json` 以 `Edit(/knowledge/raw/**)` deny 規則限制，且由人手動放入）。
+- `knowledge/raw/`：原始來源。2026-11-25 起 hachi 授權 Claude 可新增與維護（不再由 `.claude/settings.json` 限制）；仍須遵守下列界線：
+  - 只放整理過、不含敏感資訊的來源；不得放金鑰、webhook 網址、個人資訊或 private 資料夾內容。
+  - 已存在的來源檔，修改或刪除前須取得 hachi 同意（避免悄悄改寫 wiki 引用的原文）。
+  - 一律經 PR 與 CI 提交，不直接 push 到 `main`。
 - `knowledge/wiki/`：Agent 整理並維護的頁面；一檔一主題，檔名小寫加連字號（如 `tax-policy.md`）。
 - 原 `doc/` 已移入 `knowledge/wiki/`，不再保留。
 

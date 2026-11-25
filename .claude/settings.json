@@ -1,7 +1,5 @@
 {
   "permissions": {
-    "deny": [
-      "Edit(/knowledge/raw/**)"
-    ]
+    "deny": []
   }
 }
