@@ -1,7 +1,7 @@
 name: Gemini 模型每月重測
 
 # 每月 25 日台北 10:00（UTC 02:00）重測，並可手動觸發。
-# 修改本檔或腳本的 PR 只做 dry run：測試模型與驗證憑證，不寫檔、不留言、不開 PR。
+# 修改本檔或腳本的 PR 只做 dry run：驗證金鑰、models.list 與 Jira 憑證，不呼叫 generateContent（避免花費）。
 on:
   schedule:
     - cron: "0 2 25 * *"
@@ -28,7 +28,7 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: "3.14"
-      - name: 重測 23 個模型（PR 為 dry run）
+      - name: 重測 23 個模型（PR 只做 dry run）
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           ATLASSIAN_EMAIL: ${{ secrets.ATLASSIAN_EMAIL }}

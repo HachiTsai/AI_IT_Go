@@ -8,7 +8,7 @@
 - ATLASSIAN_EMAIL、ATLASSIAN_API_TOKEN：Jira 留言用，缺少時略過 Jira
 
 用法：
-    python scripts/gemini_model_check.py --dry-run   # 只測試與檢查憑證，不寫檔、不留言
+    python scripts/gemini_model_check.py --dry-run   # 只驗證金鑰、models.list 與 Jira 憑證，不呼叫 generateContent
     python scripts/gemini_model_check.py             # 寫檔並在 HAC-11 留言
 """
 
@@ -199,7 +199,7 @@ def _jira_headers() -> dict | None:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--dry-run", action="store_true", help="只測試與檢查憑證，不寫檔、不留言")
+    parser.add_argument("--dry-run", action="store_true", help="只驗證金鑰、models.list 與 Jira 憑證，不呼叫 generateContent")
     parser.add_argument("--date", default=dt.datetime.now(TZ).date().isoformat())
     args = parser.parse_args(argv)
 
@@ -216,6 +216,11 @@ def main(argv: list[str] | None = None) -> int:
             jira = None
 
     visible, generate = list_models(key)
+    if args.dry_run:
+        # dry run 只驗證金鑰與 models.list，不呼叫 generateContent，避免消耗付費額度
+        missing = [m for m in TEXT_MODELS + IMAGE_MODELS if m not in generate]
+        print(f"dry run：可見 {len(visible)}，generateContent {len(generate)}；測試清單中不可用：{missing or '無'}")
+        return 0
     results = [check_model(key, m, "text") for m in TEXT_MODELS]
     results += [check_model(key, m, "image") for m in IMAGE_MODELS]
     previous = json.loads(STATE_FILE.read_text(encoding="utf-8")) if STATE_FILE.is_file() else {}
@@ -232,9 +237,6 @@ def main(argv: list[str] | None = None) -> int:
     if summary:
         with open(summary, "a", encoding="utf-8") as fh:
             fh.write(render_markdown(args.date, results, visible, generate, diff))
-    if args.dry_run:
-        return 0
-
     out = raw_path(RAW_DIR, args.date)
     out.write_text(render_markdown(args.date, results, visible, generate, diff), encoding="utf-8")
     STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
