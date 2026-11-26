@@ -89,7 +89,17 @@ python3 .claude/skills/study-notes/scripts/note.py mermaid check path/to/note.md
 
 # 轉圖檔（選用，需自行安裝 mermaid-cli：npm install -g @mermaid-js/mermaid-cli）
 python3 .claude/skills/study-notes/scripts/note.py mermaid render path/to/note.md --out /tmp/diagrams --format png
+
+# 轉圖並內嵌成 HTML（base64 圖片；Drive 把 HTML 轉成 Google 文件時圖片會保留）
+python3 .claude/skills/study-notes/scripts/note.py mermaid embed path/to/note.md --out /tmp/note.html
+
+# 直接存成帶圖的 Google 文件（Drive 後端；轉圖失敗就中止，不會存成沒圖的版本）
+python3 .claude/skills/study-notes/scripts/note.py add -c Tools -t Title --content-file note.md --mermaid-mode image
 ```
+
+轉圖環境：`mmdc` 用 `MMDC_BIN` 指定路徑（預設找 PATH）；容器內若有 `/opt/pw-browsers/chromium` 會自動以它執行並關閉沙箱，其他位置用 `MERMAID_CHROME_PATH`。圖依尺寸縮放到最寬 620、最高 700 像素。
+
+實測（2026-11-26，Drive 連接器）：base64 內嵌的 HTML 轉成 Google 文件後，圖片確實嵌在文件裡（匯出 docx 內有 media）。`--mermaid-mode image` 在 gdrive CLI 後端上傳 HTML 的路徑只做過單元測試（mock），尚未用真實 gdrive CLI 驗證；沒有 Drive 後端時只存 Markdown 並警告。
 
 `add` 預設會在存檔前檢查 Mermaid 區塊並以警告提示；加 `--mermaid-strict` 則有問題就中止。
 
@@ -102,7 +112,8 @@ python3 .claude/skills/study-notes/scripts/note.py mermaid render path/to/note.m
 | `common.py` | 檔名清理、repo 偵測、frontmatter、找 gdrive CLI（不依賴雲端） |
 | `base.py` / `local_backend.py` | 後端介面與本機 Markdown 後端 |
 | `drive_backend.py` | gdrive CLI 後端，只有偵測到 gdrive CLI 要進 Drive 時才匯入 |
-| `mermaid.py` | Mermaid 區塊擷取、檢查、選用轉圖 |
+| `mermaid.py` | Mermaid 區塊擷取、檢查、轉圖、內嵌圖片 |
+| `html_export.py` | Markdown 轉 HTML（含內嵌圖片），供 Drive 轉成 Google 文件 |
 
 `mermaid` 子指令與本機後端完全不載入 Drive 模組。測試在 `scripts/tests/`，已納入 `pytest` 的 `testpaths`。
 

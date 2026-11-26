@@ -79,6 +79,17 @@ def report_mermaid_problems(markdown: str) -> int:
     return bad
 
 
+def build_embedded_html(markdown_text: str, title: str) -> str:
+    """mermaid 區塊轉成內嵌圖片，整份 Markdown 轉成完整 HTML。"""
+    import tempfile
+
+    from notelib.html_export import markdown_to_html
+
+    with tempfile.TemporaryDirectory(prefix="note-mermaid-") as tmp:
+        embedded = mermaid.embed_images(markdown_text, Path(tmp))
+    return markdown_to_html(embedded, title)
+
+
 def run_mermaid_command(args) -> int:
     path = Path(args.file)
     if not path.is_file():
@@ -93,6 +104,15 @@ def run_mermaid_command(args) -> int:
         bad = report_mermaid_problems(text)
         print(f"共 {len(blocks)} 個 Mermaid 區塊，{bad} 個有問題。")
         return 1 if bad else 0
+    if args.mermaid_command == "embed":
+        try:
+            html_text = build_embedded_html(text, args.title or path.stem)
+        except (RuntimeError, ValueError) as exc:
+            print(f"錯誤: {exc}", file=sys.stderr)
+            return 1
+        Path(args.out).write_text(html_text, encoding="utf-8")
+        print(f"已產生 {args.out}（{len(html_text) // 1024} KB）")
+        return 0
     try:
         produced = mermaid.render_blocks(text, Path(args.out), fmt=args.format)
     except (RuntimeError, ValueError) as exc:
@@ -132,11 +152,22 @@ def main():
         help="內文中的 ```mermaid 區塊檢查有問題時中止（預設只警告，仍照常儲存）",
     )
 
+    parser_add.add_argument(
+        "--mermaid-mode",
+        choices=["keep", "image"],
+        default="keep",
+        help="keep：mermaid 區塊保留為程式碼（預設）；image：轉成圖片內嵌後以 HTML 上傳成 Google 文件（需 mmdc）",
+    )
+
     # Mermaid command（純本機，不會載入 Drive 模組）
     parser_mm = subparsers.add_parser("mermaid", help="Mermaid 區塊檢查／轉圖（不需要 Drive）")
     mm_sub = parser_mm.add_subparsers(dest="mermaid_command", required=True)
     mm_check = mm_sub.add_parser("check", help="檢查 Markdown 檔中的 ```mermaid 區塊")
     mm_check.add_argument("file", help="Markdown 檔案路徑")
+    mm_embed = mm_sub.add_parser("embed", help="轉圖並內嵌成 HTML（可直接上傳 Drive 轉成 Google 文件）")
+    mm_embed.add_argument("file", help="Markdown 檔案路徑")
+    mm_embed.add_argument("--out", required=True, help="輸出 HTML 檔路徑")
+    mm_embed.add_argument("--title", help="HTML 標題（預設用檔名）")
     mm_render = mm_sub.add_parser("render", help="用 mermaid-cli (mmdc) 把區塊轉成圖檔")
     mm_render.add_argument("file", help="Markdown 檔案路徑")
     mm_render.add_argument("--out", required=True, help="輸出資料夾")
@@ -185,6 +216,16 @@ def main():
                 print("錯誤: Mermaid 檢查未通過，已中止儲存（移除 --mermaid-strict 可僅警告）", file=sys.stderr)
                 sys.exit(1)
 
+        html_text = None
+        if args.mermaid_mode == "image" and args.format == "doc":
+            try:
+                html_text = build_embedded_html(content, args.title)
+            except (RuntimeError, ValueError) as exc:
+                print(f"錯誤: Mermaid 轉圖失敗，已中止儲存：{exc}", file=sys.stderr)
+                sys.exit(1)
+            if isinstance(backend, LocalStorageBackend):
+                print("⚠️ 目前不是 Drive 後端，--mermaid-mode image 不會產生圖片文件，只存 Markdown。", file=sys.stderr)
+
         tags = [t.strip() for t in (args.tags or "").split(",") if t.strip()]
         msg, doc_id = backend.add(
             repo=repo_name,
@@ -193,6 +234,7 @@ def main():
             content=content,
             tags=tags,
             doc_format=args.format,
+            html=html_text,
         )
         print(msg)
 

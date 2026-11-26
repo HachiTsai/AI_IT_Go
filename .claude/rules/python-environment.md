@@ -35,6 +35,7 @@ dependencies = [
     "python-dotenv==1.2.4",
     "pyyaml==6.0.3",
     "rich==15.0.0",
+    "markdown==3.11.4",
     "typer==0.27.3",
     # AI
     "anthropic==1.13.0",

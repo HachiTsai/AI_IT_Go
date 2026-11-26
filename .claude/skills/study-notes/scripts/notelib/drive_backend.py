@@ -65,11 +65,14 @@ class GDriveCliStorageBackend(StorageBackend):
         content: str,
         tags: List[str],
         doc_format: str = "doc",
+        html: Optional[str] = None,
     ) -> Tuple[str, str]:
         repo_folder_id = self._get_or_create_repo_folder(repo)
         clean_title = note_stem(category, title)
 
-        clean_ext = ".csv" if doc_format == "sheet" else ".md"
+        # html 只用於 Google 文件：base64 內嵌圖片靠 HTML 匯入才會保留
+        use_html = bool(html) and doc_format == "doc"
+        clean_ext = ".csv" if doc_format == "sheet" else (".html" if use_html else ".md")
         temp_name = f"{clean_title}{clean_ext}"
 
         temp_dir = Path("/tmp/claude_notes")
@@ -78,7 +81,7 @@ class GDriveCliStorageBackend(StorageBackend):
 
         formatted = format_note(repo, category, title, content, tags)
         with open(temp_file, "w", encoding="utf-8") as f:
-            f.write(formatted)
+            f.write(html if use_html else formatted)
 
         # 決定 Google Workspace MIME 類型
         target_mime = WORKSPACE_MIME_TYPES.get(doc_format, WORKSPACE_MIME_TYPES["doc"])
