@@ -3,7 +3,7 @@ import sys
 import unittest
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 import google_news_digest as gnd
@@ -33,6 +33,12 @@ SAMPLE_RSS = """<?xml version="1.0" encoding="UTF-8"?>
   </channel>
 </rss>
 """
+
+SAMPLE_DATA_P = (
+    '%.@.[["en-US","US"],null],"CBMiT0FVX3lxTE5oamY4",1,2,null,false,1795673336,"AdwtSYOadUX1qYZpyLLC3ct8aXML"]'
+)
+SAMPLE_REDIRECT_HTML = f'<c-wiz data-p="{SAMPLE_DATA_P.replace(chr(34), "&quot;")}"></c-wiz>'
+SAMPLE_BATCH_TEXT = ')]}\'\n\n[["wrb.fr","Fbv4je","[\\"garturlres\\",\\"https://www.reuters.com/tech/ai-story\\",1]",null,null,null,"generic"]]'
 
 
 class TestGoogleNewsDigest(unittest.TestCase):
@@ -65,16 +71,6 @@ class TestGoogleNewsDigest(unittest.TestCase):
         self.assertEqual(len(recent), 2)
         self.assertTrue(all(a.published_at and a.published_at >= now - timedelta(hours=24) for a in recent))
 
-    def test_main_json_output(self):
-        with patch.object(gnd, "fetch_rss", return_value=SAMPLE_RSS):
-            with patch("builtins.print") as mock_print:
-                rc = gnd.main(["--regions", "TW", "--hours", "0", "--format", "json"])
-        self.assertEqual(rc, 0)
-        payload = json.loads(mock_print.call_args.args[0])
-        self.assertEqual(len(payload), 2)
-        self.assertEqual(payload[0]["region"], "TW")
-        self.assertEqual(payload[0]["related_sources"], ["工商時報"])
-
     def test_extract_paragraphs(self):
         sample_html = (
             "<html><body><nav><p>導覽列應該被略過而且這段超過二十個字元也不該出現</p></nav>"
@@ -88,26 +84,74 @@ class TestGoogleNewsDigest(unittest.TestCase):
         self.assertNotIn("導覽列", extracted)
         self.assertNotIn("太短", extracted)
 
-    def test_main_analyze_mode(self):
-        usage = {"promptTokenCount": 1000, "candidatesTokenCount": 500, "thoughtsTokenCount": 200}
+    def test_is_blocked_domain(self):
+        self.assertTrue(gnd.is_blocked_domain("https://www.reuters.com/world/ai"))
+        self.assertTrue(gnd.is_blocked_domain("https://tw.stock.yahoo.com/news/abc"))
+        self.assertTrue(gnd.is_blocked_domain("https://www.cnbc.com/2026/11/26/ai.html"))
+        self.assertFalse(gnd.is_blocked_domain("https://udn.com/news/story/6811/9903707"))
+
+    def test_decode_data_p_and_resolve_success(self):
+        article_id, ts, sig = gnd.decode_data_p_params(SAMPLE_REDIRECT_HTML)
+        self.assertEqual(article_id, "CBMiT0FVX3lxTE5oamY4")
+        self.assertEqual(ts, 1795673336)
+        self.assertEqual(sig, "AdwtSYOadUX1qYZpyLLC3ct8aXML")
+
+        get_resp = MagicMock(status_code=200, text=SAMPLE_REDIRECT_HTML)
+        post_resp = MagicMock(status_code=200, text=SAMPLE_BATCH_TEXT)
+        client = MagicMock()
+        client.request.side_effect = [get_resp, post_resp]
+
+        resolved_url, ok, err = gnd.resolve_google_news_url("https://news.google.com/rss/articles/1", client)
+        self.assertTrue(ok)
+        self.assertIsNone(err)
+        self.assertEqual(resolved_url, "https://www.reuters.com/tech/ai-story")
+
+    def test_resolve_failure_does_not_return_original_url(self):
+        bad_resp = MagicMock(status_code=200, text="<html>no data-p</html>")
+        client = MagicMock()
+        client.request.return_value = bad_resp
+
+        resolved_url, ok, err = gnd.resolve_google_news_url("https://news.google.com/rss/articles/1", client)
+        self.assertFalse(ok)
+        self.assertIsNone(resolved_url)
+        self.assertIn("data-p", err or "")
+
+    def test_collect_news_partial_region_failure(self):
+        def fake_fetch(url: str) -> str:
+            if "TW" in url:
+                raise RuntimeError("HTTP 429")
+            return SAMPLE_RSS
+
+        with patch.object(gnd, "fetch_rss", side_effect=fake_fetch):
+            articles, errors = gnd.collect_news(["TW", "US"], hours=0)
+        self.assertEqual(len(articles), 2)
+        self.assertEqual(len(errors), 1)
+        self.assertIn("地區 TW 抓取失敗", errors[0])
+
+    def test_main_json_envelope_and_delivery(self):
         with (
             patch.object(gnd, "fetch_rss", return_value=SAMPLE_RSS),
-            patch.object(gnd, "enrich_articles") as mock_enrich,
-            patch.object(gnd, "analyze_with_gemini", return_value=("## 模擬簡報", usage)) as mock_gemini,
             patch("builtins.print") as mock_print,
         ):
-            rc = gnd.main(["-q", "AI", "-r", "TW", "--hours", "0", "--analyze", "--model", "gemini-2.5-pro"])
+            rc = gnd.main(["--regions", "TW", "--hours", "0", "--no-resolve", "--format", "json"])
         self.assertEqual(rc, 0)
-        mock_enrich.assert_called_once()
-        mock_gemini.assert_called_once()
-        printed = mock_print.call_args.args[0]
-        self.assertIn("## 模擬簡報", printed)
-        self.assertIn("gemini-2.5-pro", printed)
+        payload = json.loads(mock_print.call_args.args[0])
+        self.assertIn("generated_at", payload)
+        self.assertTrue(payload["notebook_title"].endswith("_新聞日報"))
+        self.assertEqual(len(payload["articles"]), 2)
+        self.assertEqual(payload["errors"], [])
 
-    def test_resolve_perspective(self):
-        self.assertIn("投資人", gnd.resolve_perspective("investor"))
-        self.assertEqual(gnd.resolve_perspective("台灣雲端維運工程師"), "台灣雲端維運工程師")
-        self.assertIn("情報分析師", gnd.resolve_perspective(None))
+    def test_main_returns_nonzero_when_all_resolutions_fail(self):
+        with (
+            patch.object(gnd, "fetch_rss", return_value=SAMPLE_RSS),
+            patch.object(gnd, "resolve_google_news_url", return_value=(None, False, "decode error")),
+            patch("builtins.print") as mock_print,
+        ):
+            rc = gnd.main(["--regions", "TW", "--hours", "0", "--format", "json"])
+        self.assertEqual(rc, 1)
+        payload = json.loads(mock_print.call_args.args[0])
+        self.assertEqual(len(payload["errors"]), 2)
+        self.assertTrue(all(not a["resolve_ok"] for a in payload["articles"]))
 
 
 if __name__ == "__main__":
