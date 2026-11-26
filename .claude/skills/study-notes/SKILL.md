@@ -77,6 +77,35 @@ python3 .claude/skills/study-notes/scripts/note.py list
 
 ---
 
+### 5. Mermaid 圖表
+筆記內文可直接寫 ```` ```mermaid ```` 區塊，原始碼會原樣保留（`read` 匯出後仍在）。
+Google 文件端是否把它渲染成圖取決於 Google，本技能不保證；需要圖檔時用轉圖指令。
+
+```bash
+# 檢查（不需要 Drive）：圍欄未閉合、空區塊、第一行不是已知圖表宣告、括號不成對
+python3 .claude/skills/study-notes/scripts/note.py mermaid check path/to/note.md
+
+# 轉圖檔（選用，需自行安裝 mermaid-cli：npm install -g @mermaid-js/mermaid-cli）
+python3 .claude/skills/study-notes/scripts/note.py mermaid render path/to/note.md --out /tmp/diagrams --format png
+```
+
+`add` 預設會在存檔前檢查 Mermaid 區塊並以警告提示；加 `--mermaid-strict` 則有問題就中止。
+
+## 🧩 腳本模組結構
+
+入口 `scripts/note.py` 只負責 CLI 與選擇後端，實作在 `scripts/notelib/`：
+
+| 模組 | 內容 |
+| :--- | :--- |
+| `common.py` | 檔名清理、repo 偵測、frontmatter、找 gdrive CLI（不依賴雲端） |
+| `base.py` / `local_backend.py` | 後端介面與本機 Markdown 後端 |
+| `drive_backend.py` | gdrive CLI 後端，只有偵測到 gdrive CLI 要進 Drive 時才匯入 |
+| `mermaid.py` | Mermaid 區塊擷取、檢查、選用轉圖 |
+
+`mermaid` 子指令與本機後端完全不載入 Drive 模組。測試在 `scripts/tests/`，已納入 `pytest` 的 `testpaths`。
+
+---
+
 ## 📝 筆記格式標準 (Frontmatter + Markdown)
 
 每份筆記自動產生標準 YAML Frontmatter，上傳時 Google Drive 會自動將 Markdown 標題、清單、表格解析為原生 Google 文件版面：

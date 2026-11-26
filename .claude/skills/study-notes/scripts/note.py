@@ -1,483 +1,57 @@
 #!/usr/bin/env python3
 """
-Study Notes CLI - 跨專案通用學習筆記管理工具
-支援自動同步至 Google Drive 的 Agent_Study_Notes 目錄（按 repo名 存放）。
+Study Notes CLI - 跨專案通用學習筆記管理工具（入口）
+
+實作已拆成 notelib/ 模組：
+  common         共用工具（不依賴雲端）
+  local_backend  本機 Markdown 後端（預設可獨立運作）
+  drive_backend  gdrive CLI 後端（只在真的要進 Google Drive 時才匯入）
+  mermaid        Mermaid 區塊檢查與選用轉圖
+
 所有存入 Google Drive 的檔案一律採用 Google 原生文件格式 (Google Docs 📄, Sheets 📊, Slides 📽️)。
-支援 gdrive CLI 與本地端雙模同步。
 """
 
 import argparse
-import datetime
-import json
 import os
-import re
-import shutil
-import subprocess
 import sys
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
 
-DEFAULT_FOLDER_ID = "1Xlj49hpabV47WMzctSNS29_Vuuh6ddHn"
-# 無 gdrive CLI 且未設定 AGENT_STUDY_NOTES_DIR 時的本機暫存位置（不會同步到 Google Drive）
-FALLBACK_CACHE_DIR = Path.home() / ".cache" / "agent_study_notes"
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-# Google Workspace 原生 MIME 類型映射
-WORKSPACE_MIME_TYPES = {
-    "doc": "application/vnd.google-apps.document",
-    "sheet": "application/vnd.google-apps.spreadsheet",
-    "slide": "application/vnd.google-apps.presentation",
-}
+from notelib.base import StorageBackend  # noqa: E402
+from notelib.common import (  # noqa: E402,F401
+    DEFAULT_FOLDER_ID,
+    FALLBACK_CACHE_DIR,
+    find_gdrive_bin,
+    get_current_repo_name,
+    sanitize_filename,
+)
+from notelib.local_backend import LocalStorageBackend  # noqa: E402
+from notelib import mermaid  # noqa: E402
 
-WORKSPACE_TYPE_NAMES = {
-    "application/vnd.google-apps.document": "Google Doc 📄",
-    "application/vnd.google-apps.spreadsheet": "Google Sheet 📊",
-    "application/vnd.google-apps.presentation": "Google Slide 📽️",
-    "application/vnd.google-apps.folder": "Google Folder 📁",
-}
+_LAZY_DRIVE_NAMES = {"GDriveCliStorageBackend", "WORKSPACE_MIME_TYPES", "WORKSPACE_TYPE_NAMES"}
 
 
-def get_current_repo_name() -> str:
-    """自動偵測當前 Git Repository 名稱，若不在 git 內則回傳 'Common'"""
-    try:
-        result = subprocess.run(
-            ["git", "rev-parse", "--show-toplevel"],
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        if result.returncode == 0 and result.stdout.strip():
-            return Path(result.stdout.strip()).name
-    except Exception:
-        pass
-    return "Common"
+def __getattr__(name):
+    """舊程式碼 `from note import GDriveCliStorageBackend` 仍可用，且只在用到時才匯入 Drive 模組。"""
+    if name in _LAZY_DRIVE_NAMES:
+        from notelib import drive_backend
 
-
-def sanitize_filename(name: str) -> str:
-    """清理檔名中的非法字元"""
-    name = re.sub(r'[\\/*?:"<>|]', "", name)
-    name = re.sub(r"\s+", "_", name.strip())
-    return name
-
-
-def find_gdrive_bin() -> Optional[str]:
-    """尋找 gdrive CLI 執行檔路徑"""
-    env_bin = os.environ.get("GDRIVE_BIN")
-    if env_bin and os.access(env_bin, os.X_OK):
-        return env_bin
-    custom_bin = Path.home() / ".gemini" / "antigravity" / "bin" / "gdrive"
-    if custom_bin.exists() and os.access(custom_bin, os.X_OK):
-        return str(custom_bin)
-    system_bin = shutil.which("gdrive")
-    if system_bin:
-        return system_bin
-    return None
-
-
-class StorageBackend:
-    def add(
-        self,
-        repo: str,
-        category: str,
-        title: str,
-        content: str,
-        tags: List[str],
-        doc_format: str = "doc",
-    ) -> Tuple[str, str]:
-        """新增筆記，回傳 (狀態訊息, 檔案路徑或ID或URL)"""
-        raise NotImplementedError
-
-    def search(self, query: str, repo: Optional[str] = None) -> List[Dict]:
-        """檢索筆記"""
-        raise NotImplementedError
-
-    def read(self, identifier: str, repo: Optional[str] = None) -> Optional[str]:
-        """讀取筆記內容"""
-        raise NotImplementedError
-
-    def list_notes(self, repo: Optional[str] = None) -> List[Dict]:
-        """列出筆記"""
-        raise NotImplementedError
-
-
-class LocalStorageBackend(StorageBackend):
-    def __init__(self, root_dir: Path):
-        self.root_dir = root_dir
-        self.root_dir.mkdir(parents=True, exist_ok=True)
-
-    def _format_content(
-        self, repo: str, category: str, title: str, content: str, tags: List[str]
-    ) -> str:
-        today = datetime.date.today().isoformat()
-        tags_str = ", ".join(f'"{t.strip()}"' for t in tags if t.strip())
-        frontmatter = (
-            f"---\n"
-            f'title: "{title}"\n'
-            f'repo: "{repo}"\n'
-            f'category: "{category}"\n'
-            f"date: {today}\n"
-            f"tags: [{tags_str}]\n"
-            f"---\n\n"
-        )
-        return frontmatter + content.strip() + "\n"
-
-    def add(
-        self,
-        repo: str,
-        category: str,
-        title: str,
-        content: str,
-        tags: List[str],
-        doc_format: str = "doc",
-    ) -> Tuple[str, str]:
-        repo_dir = self.root_dir / sanitize_filename(repo)
-        repo_dir.mkdir(parents=True, exist_ok=True)
-
-        clean_cat = sanitize_filename(category)
-        clean_raw_title = sanitize_filename(title)
-        if clean_raw_title.startswith(f"{clean_cat}_"):
-            clean_title = clean_raw_title
-        else:
-            clean_title = f"{clean_cat}_{clean_raw_title}"
-
-        filename = f"{clean_title}.md"
-        target_path = repo_dir / filename
-        formatted_content = self._format_content(
-            repo, category, title, content, tags
-        )
-
-        with open(target_path, "w", encoding="utf-8") as f:
-            f.write(formatted_content)
-
-        return (
-            f"成功寫入本機筆記備份: {filename}",
-            str(target_path),
-        )
-
-    def list_notes(self, repo: Optional[str] = None) -> List[Dict]:
-        notes = []
-        if repo:
-            target_dirs = [self.root_dir / sanitize_filename(repo)]
-        else:
-            target_dirs = [p for p in self.root_dir.iterdir() if p.is_dir()]
-
-        for r_dir in target_dirs:
-            if not r_dir.exists():
-                continue
-            for file_path in r_dir.glob("*.md"):
-                try:
-                    stat = file_path.stat()
-                    notes.append(
-                        {
-                            "repo": r_dir.name,
-                            "filename": file_path.name,
-                            "type": "Markdown 📝",
-                            "path": str(file_path),
-                            "modified": datetime.datetime.fromtimestamp(
-                                stat.st_mtime
-                            ).strftime("%Y-%m-%d %H:%M:%S"),
-                        }
-                    )
-                except Exception:
-                    pass
-        notes.sort(key=lambda x: (x["repo"], x["filename"]))
-        return notes
-
-    def search(self, query: str, repo: Optional[str] = None) -> List[Dict]:
-        all_notes = self.list_notes(repo)
-        query_lower = query.lower()
-        results = []
-
-        for note in all_notes:
-            file_path = Path(note["path"])
-            try:
-                with open(file_path, "r", encoding="utf-8") as f:
-                    content = f.read()
-
-                matched = False
-                snippet = ""
-                if query_lower in note["filename"].lower():
-                    matched = True
-                    snippet = "匹配檔名"
-                elif query_lower in content.lower():
-                    matched = True
-                    idx = content.lower().find(query_lower)
-                    start = max(0, idx - 40)
-                    end = min(len(content), idx + 60)
-                    snippet = "..." + content[start:end].replace("\n", " ") + "..."
-
-                if matched:
-                    res = dict(note)
-                    res["snippet"] = snippet
-                    results.append(res)
-            except Exception:
-                continue
-
-        return results
-
-    def read(self, identifier: str, repo: Optional[str] = None) -> Optional[str]:
-        target = Path(identifier)
-        if target.exists() and target.is_file():
-            with open(target, "r", encoding="utf-8") as f:
-                return f.read()
-
-        all_notes = self.list_notes(repo)
-        for note in all_notes:
-            if (
-                note["filename"] == identifier
-                or note["filename"].lower() == identifier.lower()
-                or identifier.lower() in note["filename"].lower()
-            ):
-                with open(note["path"], "r", encoding="utf-8") as f:
-                    return f.read()
-        return None
-
-
-class GDriveCliStorageBackend(StorageBackend):
-    """
-    透過 gdrive CLI 直接在雲端建立與管理 Google 原生文件格式 (Docs, Sheets, Slides)。
-    """
-    def __init__(self, gdrive_bin: str, folder_id: str):
-        self.gdrive_bin = gdrive_bin
-        self.folder_id = folder_id
-
-    def _run_gdrive(self, args: List[str]) -> subprocess.CompletedProcess:
-        cmd = [self.gdrive_bin] + args
-        return subprocess.run(cmd, capture_output=True, text=True, check=False)
-
-    def _get_or_create_repo_folder(self, repo: str) -> str:
-        res = self._run_gdrive(["readonly", "ls", self.folder_id, "--json"])
-        if res.returncode == 0:
-            try:
-                items = json.loads(res.stdout.strip() or "[]")
-                for item in items:
-                    if item.get("name") == repo and item.get("mimeType") == "application/vnd.google-apps.folder":
-                        return item["id"]
-            except Exception:
-                pass
-
-        res_mkdir = self._run_gdrive(["mutate", "mkdir", repo, "--parent", self.folder_id, "--json"])
-        if res_mkdir.returncode == 0:
-            try:
-                data = json.loads(res_mkdir.stdout.strip())
-                if "id" in data:
-                    return data["id"]
-            except Exception:
-                pass
-        return self.folder_id
-
-    def add(
-        self,
-        repo: str,
-        category: str,
-        title: str,
-        content: str,
-        tags: List[str],
-        doc_format: str = "doc",
-    ) -> Tuple[str, str]:
-        repo_folder_id = self._get_or_create_repo_folder(repo)
-        clean_cat = sanitize_filename(category)
-        clean_raw_title = sanitize_filename(title)
-        if clean_raw_title.startswith(f"{clean_cat}_"):
-            clean_title = clean_raw_title
-        else:
-            clean_title = f"{clean_cat}_{clean_raw_title}"
-
-        clean_ext = ".csv" if doc_format == "sheet" else ".md"
-        temp_name = f"{clean_title}{clean_ext}"
-
-        temp_dir = Path("/tmp/claude_notes")
-        temp_dir.mkdir(parents=True, exist_ok=True)
-        temp_file = temp_dir / temp_name
-
-        today = datetime.date.today().isoformat()
-        tags_str = ", ".join(f'"{t.strip()}"' for t in tags if t.strip())
-        formatted = (
-            f"---\n"
-            f'title: "{title}"\n'
-            f'repo: "{repo}"\n'
-            f'category: "{category}"\n'
-            f"date: {today}\n"
-            f"tags: [{tags_str}]\n"
-            f"---\n\n"
-            f"{content.strip()}\n"
-        )
-        with open(temp_file, "w", encoding="utf-8") as f:
-            f.write(formatted)
-
-        # 決定 Google Workspace MIME 類型
-        target_mime = WORKSPACE_MIME_TYPES.get(doc_format, WORKSPACE_MIME_TYPES["doc"])
-
-        # 上傳並要求 Google Drive 轉換為原生文件格式
-        upload_cmd = [
-            "mutate", "upload", str(temp_file),
-            "--mime-type", target_mime,
-            "--parent", repo_folder_id,
-            "--json"
-        ]
-        res = self._run_gdrive(upload_cmd)
-
-        if res.returncode != 0:
-            return (
-                f"上傳 Google Drive 失敗：{res.stderr.strip()}",
-                str(temp_file),
-            )
-
-        # 從回傳中提取 File ID
-        m = re.search(r"\(ID:\s*([^\)]+)\)", res.stdout)
-        file_id = m.group(1) if m else ""
-
-        if not file_id:
-            try:
-                data = json.loads(res.stdout.strip())
-                file_id = data.get("id", "")
-            except Exception:
-                pass
-
-        doc_url = ""
-        if file_id:
-            # 重新命名為無副檔名之 Google 文件標準標題
-            self._run_gdrive(["mutate", "rename", file_id, clean_title])
-            # 取得網頁檢視 URL
-            url_res = self._run_gdrive(["readonly", "url", file_id])
-            doc_url = url_res.stdout.strip()
-
-        # 本機快照一律存放於系統快取目錄 (~/.cache/agent_study_notes)，絕不寫入 Google Drive 本機同步目錄以防自動上傳 .md
-        cache_dir = Path.home() / ".cache" / "agent_study_notes" / sanitize_filename(repo)
-        try:
-            cache_dir.mkdir(parents=True, exist_ok=True)
-            local_cache = cache_dir / f"{clean_title}.md"
-            with open(local_cache, "w", encoding="utf-8") as f:
-                f.write(formatted)
-        except Exception:
-            pass
-
-        type_label = WORKSPACE_TYPE_NAMES.get(target_mime, "Google 文件")
-        link_str = doc_url or (f"https://docs.google.com/document/d/{file_id}/edit" if file_id else "")
-        return (
-            f"成功建立 {type_label} 並存入 Google Drive: {clean_title}\n連結: {link_str}",
-            link_str or file_id,
-        )
-
-    def list_notes(self, repo: Optional[str] = None) -> List[Dict]:
-        notes = []
-        if repo:
-            target_folders = [(repo, self._get_or_create_repo_folder(repo))]
-        else:
-            # 遍歷所有 repo 資料夾以列出真正的筆記文件
-            target_folders = []
-            res_root = self._run_gdrive(["readonly", "ls", self.folder_id, "--json"])
-            if res_root.returncode == 0:
-                try:
-                    for item in json.loads(res_root.stdout.strip() or "[]"):
-                        if item.get("mimeType") == "application/vnd.google-apps.folder":
-                            target_folders.append((item.get("name"), item.get("id")))
-                except Exception:
-                    pass
-
-        for r_name, f_id in target_folders:
-            res = self._run_gdrive(["readonly", "ls", f_id, "--json"])
-            if res.returncode == 0:
-                try:
-                    items = json.loads(res.stdout.strip() or "[]")
-                    for item in items:
-                        mime = item.get("mimeType", "")
-                        if mime == "application/vnd.google-apps.folder":
-                            continue
-                        if mime in WORKSPACE_TYPE_NAMES or item.get("name", "").endswith(".md"):
-                            type_name = WORKSPACE_TYPE_NAMES.get(mime, "Markdown 📝")
-                            notes.append(
-                                {
-                                    "repo": r_name,
-                                    "filename": item.get("name"),
-                                    "type": type_name,
-                                    "id": item.get("id"),
-                                    "modified": item.get("modifiedTime", ""),
-                                }
-                            )
-                except Exception:
-                    pass
-        notes.sort(key=lambda x: (x["repo"], x["filename"]))
-        return notes
-
-    def search(self, query: str, repo: Optional[str] = None) -> List[Dict]:
-        res = self._run_gdrive(["readonly", "search", "--name-contains", query, "--json"])
-        results = []
-        if res.returncode == 0:
-            try:
-                items = json.loads(res.stdout.strip() or "[]")
-                for item in items:
-                    mime = item.get("mimeType", "")
-                    type_name = WORKSPACE_TYPE_NAMES.get(mime, "檔案")
-                    results.append(
-                        {
-                            "repo": repo or "Remote",
-                            "filename": item.get("name"),
-                            "type": type_name,
-                            "id": item.get("id"),
-                            "snippet": f"匹配 Drive {type_name}: {item.get('name')}",
-                        }
-                    )
-            except Exception:
-                pass
-        return results
-
-    def read(self, identifier: str, repo: Optional[str] = None) -> Optional[str]:
-        temp_dir = Path("/tmp/claude_notes")
-        temp_dir.mkdir(parents=True, exist_ok=True)
-        out_file = temp_dir / "read_note.md"
-
-        file_id = identifier
-
-        # 優先從清單中依檔名或 ID 比對
-        matched_id = None
-        all_notes = self.list_notes(repo)
-
-        # 1. 精確比對檔名或 ID
-        for n in all_notes:
-            if n["filename"] == identifier or n.get("id") == identifier:
-                matched_id = n.get("id")
-                break
-
-        # 2. 忽略大小寫比對檔名
-        if not matched_id:
-            for n in all_notes:
-                if n["filename"].lower() == identifier.lower():
-                    matched_id = n.get("id")
-                    break
-
-        # 3. 部分比對檔名
-        if not matched_id:
-            for n in all_notes:
-                if identifier.lower() in n["filename"].lower():
-                    matched_id = n.get("id")
-                    break
-
-        if matched_id:
-            file_id = matched_id
-
-        # 優先嘗試以 export --format md 讀取 Google Doc
-        res = self._run_gdrive(["readonly", "export", file_id, str(out_file), "--format", "md"])
-        if res.returncode == 0 and out_file.exists():
-            with open(out_file, "r", encoding="utf-8") as f:
-                return f.read()
-
-        # 退回以 download 讀取普通檔案
-        res_down = self._run_gdrive(["readonly", "download", file_id, "-o", str(out_file)])
-        if res_down.returncode == 0 and out_file.exists():
-            with open(out_file, "r", encoding="utf-8") as f:
-                return f.read()
-
-        return None
+        return getattr(drive_backend, name)
+    raise AttributeError(f"module 'note' has no attribute {name!r}")
 
 
 def select_backend() -> StorageBackend:
     """
     自動判定最適合的儲存後端。
-    只要系統中具備已授權的 gdrive CLI，優先採用 GDriveCliStorageBackend 以確保建立 Google 原生文件格式。
+    只要系統中具備已授權的 gdrive CLI，才匯入並採用 GDriveCliStorageBackend，
+    以確保建立 Google 原生文件格式；否則完全不載入 Drive 模組。
     """
     gdrive_bin = find_gdrive_bin()
     folder_id = os.environ.get("AGENT_STUDY_NOTES_FOLDER_ID", DEFAULT_FOLDER_ID)
     if gdrive_bin:
+        from notelib.drive_backend import GDriveCliStorageBackend
+
         return GDriveCliStorageBackend(gdrive_bin, folder_id)
 
     env_dir = os.environ.get("AGENT_STUDY_NOTES_DIR")
@@ -490,6 +64,45 @@ def select_backend() -> StorageBackend:
         file=sys.stderr,
     )
     return LocalStorageBackend(FALLBACK_CACHE_DIR)
+
+
+def report_mermaid_problems(markdown: str) -> int:
+    """把 Mermaid 檢查結果印到 stderr，回傳有問題的區塊數。"""
+    bad = 0
+    for block in mermaid.check_markdown(markdown):
+        if block.issues:
+            bad += 1
+            print(
+                f"⚠️ Mermaid 區塊 #{block.index}（第 {block.start_line} 行）：" + "；".join(block.issues),
+                file=sys.stderr,
+            )
+    return bad
+
+
+def run_mermaid_command(args) -> int:
+    path = Path(args.file)
+    if not path.is_file():
+        print(f"錯誤: 找不到檔案 {args.file}", file=sys.stderr)
+        return 1
+    text = path.read_text(encoding="utf-8")
+    if args.mermaid_command == "check":
+        blocks = mermaid.check_markdown(text)
+        if not blocks:
+            print("沒有找到 ```mermaid 區塊。")
+            return 0
+        bad = report_mermaid_problems(text)
+        print(f"共 {len(blocks)} 個 Mermaid 區塊，{bad} 個有問題。")
+        return 1 if bad else 0
+    try:
+        produced = mermaid.render_blocks(text, Path(args.out), fmt=args.format)
+    except (RuntimeError, ValueError) as exc:
+        print(f"錯誤: {exc}", file=sys.stderr)
+        return 1
+    for p in produced:
+        print(f"已產生 {p}")
+    if not produced:
+        print("沒有找到 ```mermaid 區塊。")
+    return 0
 
 
 def main():
@@ -513,6 +126,22 @@ def main():
         help="Google Workspace 格式：doc (Google 文件 📄，預設), sheet (Google 試算表 📊), slide (Google 簡報 📽️)",
     )
 
+    parser_add.add_argument(
+        "--mermaid-strict",
+        action="store_true",
+        help="內文中的 ```mermaid 區塊檢查有問題時中止（預設只警告，仍照常儲存）",
+    )
+
+    # Mermaid command（純本機，不會載入 Drive 模組）
+    parser_mm = subparsers.add_parser("mermaid", help="Mermaid 區塊檢查／轉圖（不需要 Drive）")
+    mm_sub = parser_mm.add_subparsers(dest="mermaid_command", required=True)
+    mm_check = mm_sub.add_parser("check", help="檢查 Markdown 檔中的 ```mermaid 區塊")
+    mm_check.add_argument("file", help="Markdown 檔案路徑")
+    mm_render = mm_sub.add_parser("render", help="用 mermaid-cli (mmdc) 把區塊轉成圖檔")
+    mm_render.add_argument("file", help="Markdown 檔案路徑")
+    mm_render.add_argument("--out", required=True, help="輸出資料夾")
+    mm_render.add_argument("--format", choices=["png", "svg"], default="png")
+
     # Search command
     parser_search = subparsers.add_parser("search", help="搜尋既有筆記")
     parser_search.add_argument("query", help="搜尋關鍵字")
@@ -528,8 +157,12 @@ def main():
     parser_list.add_argument("--repo", help="限定特定 repo")
 
     args = parser.parse_args()
+
+    if args.command == "mermaid":
+        sys.exit(run_mermaid_command(args))
+
     backend = select_backend()
-    repo_name = args.repo or get_current_repo_name()
+    repo_name = getattr(args, "repo", None) or get_current_repo_name()
 
     if args.command == "add":
         content = ""
@@ -545,6 +178,12 @@ def main():
         else:
             print("錯誤: 必須提供 --content 或 --content-file", file=sys.stderr)
             sys.exit(1)
+
+        if args.format == "doc":
+            problems = report_mermaid_problems(content)
+            if problems and args.mermaid_strict:
+                print("錯誤: Mermaid 檢查未通過，已中止儲存（移除 --mermaid-strict 可僅警告）", file=sys.stderr)
+                sys.exit(1)
 
         tags = [t.strip() for t in (args.tags or "").split(",") if t.strip()]
         msg, doc_id = backend.add(
