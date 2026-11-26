@@ -1,7 +1,6 @@
 ---
 title: Google 新聞 × Antigravity 結合指南
 sources:
-  - knowledge/raw/google-news-antigravity-2026-11-26.md
   - knowledge/raw/google-news-notebook-architecture-2026-11-26.md
 updated: 2026-11-26
 ---
@@ -9,8 +8,6 @@ updated: 2026-11-26
 # Google 新聞 × Antigravity 結合指南
 
 ## 核心定位：零 API 費用的「RSS → NotebookLM」自動化情報流
-
-> "Google 新聞 + Antigravity 的強項是跨媒體情報直接接進自動化工作流（Agentic Workflow），結合本地腳本、知識庫與排程。" — knowledge/raw/google-news-antigravity-2026-11-26.md
 
 > "腳本不再依賴 `GEMINI_API_KEY` 或 macOS Keychain，僅保留純抓取、還原與正文備援能力。" — knowledge/raw/google-news-notebook-architecture-2026-11-26.md
 
@@ -21,8 +18,6 @@ updated: 2026-11-26
 3. **NotebookLM**：免費接手摘要、跨國溫差比對、指定視角追問（投資人／工程師／資安／PM）與簡報轉換。
 
 ## 抓取與失敗保護設計
-
-> "Google News `/rss/search` 會對簡易機器人 User-Agent 回傳 `429 Too Many Requests`，改用標準瀏覽器 User-Agent 並搭配請求間隔與退避重試可穩定取得 XML。" — knowledge/raw/google-news-antigravity-2026-11-26.md
 
 > "被擋網域清單（`BLOCKED_DOMAINS`）：`tw.stock.yahoo.com`、`cnbc.com`、`reuters.com` 實測會封鎖 NotebookLM 伺服器端抓取，命中時標記 `delivery="text"` 並僅對這些網域抽取正文 `excerpt`。" — knowledge/raw/google-news-notebook-architecture-2026-11-26.md
 
