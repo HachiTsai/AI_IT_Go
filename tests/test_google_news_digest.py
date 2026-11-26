@@ -183,6 +183,29 @@ class TestGoogleNewsDigest(unittest.TestCase):
         self.assertIn("HTTP 401", errors[0])
         self.assertEqual(candidates[0].delivery, "skip")
 
+    def test_enrich_default_mode_backfill_and_limit_cap(self):
+        candidates = [
+            gnd.NewsArticle("US", "Story 1", "Reuters", "https://news.google.com/rss/articles/1", None),
+            gnd.NewsArticle("US", "Story 2", "AP", "https://news.google.com/rss/articles/2", None),
+            gnd.NewsArticle("US", "Story 3", "BBC", "https://news.google.com/rss/articles/3", None),
+        ]
+        resolved = [
+            ("https://www.reuters.com/1", True, None),
+            ("https://apnews.com/2", True, None),
+            ("https://www.bbc.com/3", True, None),
+        ]
+        with (
+            patch.object(gnd, "resolve_google_news_url", side_effect=resolved),
+            patch.object(gnd, "_fetch_excerpt", return_value=("", "正文抽取 HTTP 401")),
+        ):
+            kept, errors = gnd.enrich_articles(candidates, limit_per_region=1, delay=0, prefer_text=False)
+
+        self.assertEqual(len(kept), 1)
+        self.assertEqual(kept[0].title, "Story 2")
+        self.assertEqual(kept[0].delivery, "url")
+        self.assertEqual(len(errors), 1)
+        self.assertIn("HTTP 401", errors[0])
+
 
 if __name__ == "__main__":
     unittest.main()
