@@ -4,6 +4,7 @@ __pycache__/
 *.pyo # 在 Python 3.5+ 中已棄用
 # *.pyd # Windows 特定的 Python 函式庫
 .venv/
+uv.lock
 .coverage
 htmlcov/
 .pytest_cache/
