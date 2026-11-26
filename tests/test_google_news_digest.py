@@ -75,6 +75,40 @@ class TestGoogleNewsDigest(unittest.TestCase):
         self.assertEqual(payload[0]["region"], "TW")
         self.assertEqual(payload[0]["related_sources"], ["工商時報"])
 
+    def test_extract_paragraphs(self):
+        sample_html = (
+            "<html><body><nav><p>導覽列應該被略過而且這段超過二十個字元也不該出現</p></nav>"
+            "<article><p>這是第一段新聞正文，內容夠長應該被保留下來。</p>"
+            "<p>太短</p>"
+            "<p>這是第二段新聞正文，包含更多技術細節與市場分析。</p></article></body></html>"
+        )
+        extracted = gnd.extract_paragraphs(sample_html, max_chars=200)
+        self.assertIn("這是第一段新聞正文", extracted)
+        self.assertIn("這是第二段新聞正文", extracted)
+        self.assertNotIn("導覽列", extracted)
+        self.assertNotIn("太短", extracted)
+
+    def test_main_analyze_mode(self):
+        usage = {"promptTokenCount": 1000, "candidatesTokenCount": 500, "thoughtsTokenCount": 200}
+        with (
+            patch.object(gnd, "fetch_rss", return_value=SAMPLE_RSS),
+            patch.object(gnd, "enrich_articles") as mock_enrich,
+            patch.object(gnd, "analyze_with_gemini", return_value=("## 模擬簡報", usage)) as mock_gemini,
+            patch("builtins.print") as mock_print,
+        ):
+            rc = gnd.main(["-q", "AI", "-r", "TW", "--hours", "0", "--analyze", "--model", "gemini-2.5-pro"])
+        self.assertEqual(rc, 0)
+        mock_enrich.assert_called_once()
+        mock_gemini.assert_called_once()
+        printed = mock_print.call_args.args[0]
+        self.assertIn("## 模擬簡報", printed)
+        self.assertIn("gemini-2.5-pro", printed)
+
+    def test_resolve_perspective(self):
+        self.assertIn("投資人", gnd.resolve_perspective("investor"))
+        self.assertEqual(gnd.resolve_perspective("台灣雲端維運工程師"), "台灣雲端維運工程師")
+        self.assertIn("情報分析師", gnd.resolve_perspective(None))
+
 
 if __name__ == "__main__":
     unittest.main()
