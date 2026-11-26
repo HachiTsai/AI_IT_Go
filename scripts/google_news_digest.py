@@ -337,7 +337,7 @@ def enrich_articles(
             article.resolve_ok = ok
             article.resolved_url = real_url
             if not ok or not real_url:
-                article.delivery = "text"
+                article.delivery = "skip"
                 if err:
                     errors.append(f"[{article.region}] {article.title}: {err}")
                 continue

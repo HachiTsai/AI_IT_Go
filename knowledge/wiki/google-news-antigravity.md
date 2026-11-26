@@ -25,12 +25,13 @@ updated: 2026-11-26
 
 ## Antigravity Automation Runbook
 
-1. 執行腳本取得 JSON（例：`uv run python scripts/google_news_digest.py -q "AI" -r TW,US --hours 24 -n 5 -f json`）。
+1. 執行腳本取得 JSON（例：`uv run python scripts/google_news_digest.py -q "AI" -r TW,US --hours 24 -n 5 -f json`；註：`--no-resolve` 僅供除錯略過還原用）。
 2. 若腳本回傳非零結束碼、`articles` 為空或 `errors` 涵蓋全部地區，停止並通知使用者，不建立空筆記本。
 3. 呼叫 `gemini-notebook` MCP 的 `create_notebook`，以 `notebook_title`（`YYYY-MM-DD_新聞日報`）建立當天筆記本。
 4. 逐筆送入 `create_source`：
    - `delivery == "url"` 且 `resolve_ok == true`：送 `webContent.url = resolved_url`。
    - `delivery == "text"` 且 `excerpt` 非空：送 `textContent`（`mimeType: "text/plain"`）。
+   - `delivery == "skip"`：跳過不送（已記錄於 `errors`）。
 5. 呼叫 `list_sources` 檢查狀態；若有 `FAILED` 且腳本或備援抓取有正文，改用 `textContent` 重送一次。
 6. 回報使用者：筆記本名稱與連結、成功筆數、失敗筆數與標題（註：官方 MCP 無刪除 API，舊筆記本需於 NotebookLM 網頁版手動清理）。
 

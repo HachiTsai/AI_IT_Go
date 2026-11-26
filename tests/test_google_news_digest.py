@@ -152,6 +152,7 @@ class TestGoogleNewsDigest(unittest.TestCase):
         payload = json.loads(mock_print.call_args.args[0])
         self.assertEqual(len(payload["errors"]), 2)
         self.assertTrue(all(not a["resolve_ok"] for a in payload["articles"]))
+        self.assertTrue(all(a["delivery"] == "skip" for a in payload["articles"]))
 
 
 if __name__ == "__main__":
