@@ -9,12 +9,16 @@
 - 轉圖是選用功能，需自行安裝 mermaid-cli（mmdc）；沒有時明確回報而不是靜默略過。
 """
 
+import json
+import os
 import re
 import shutil
+import struct
 import subprocess
+import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import List, Optional
+from typing import Dict, List, Optional, Tuple
 
 # Mermaid 目前常見的圖表宣告關鍵字（第一個有效行必須以其中之一開頭）
 DIAGRAM_TYPES = (
@@ -26,7 +30,7 @@ DIAGRAM_TYPES = (
     "C4Container", "C4Component", "C4Dynamic", "C4Deployment", "radar", "radar-beta",
 )
 
-_FENCE_OPEN = re.compile(r"^(?P<indent>[ \t]*)(?P<fence>`{3,}|~{3,})[ \t]*(?P<lang>mermaid)?[ \t]*$", re.I)
+_FENCE_OPEN = re.compile(r"^(?P<indent>[ \t]*)(?P<fence>`{3,}|~{3,})[ \t]*(?P<lang>[\w+#.-]*)[ \t]*$", re.I)
 
 
 @dataclass
@@ -35,6 +39,7 @@ class MermaidBlock:
     start_line: int  # 開圍欄所在行（從 1 起算）
     code: str
     closed: bool = True
+    end_line: int = 0  # 結尾圍欄所在行（未閉合時為最後一行），從 1 起算
     issues: List[str] = field(default_factory=list)
 
 
@@ -59,19 +64,26 @@ def extract_blocks(markdown: str) -> List[MermaidBlock]:
         body: List[str] = []
         i += 1
         closed = False
+        end_line = start + 1
         while i < len(lines):
+            end_line = i + 1
             if close_re.match(lines[i]):
                 closed = True
                 i += 1
                 break
             body.append(lines[i])
             i += 1
+        lang = m.group("lang").lower()
+        if lang not in ("", "mermaid"):
+            continue  # 其他語言的圍欄整段略過，避免把它的結尾圍欄誤當成新的開頭
         code = "\n".join(body).strip("\n")
-        if not m.group("lang"):
+        if not lang:
             first = _first_meaningful_line(code)
             if not (closed and first and _is_diagram_decl(first)):
                 continue
-        blocks.append(MermaidBlock(index=len(blocks) + 1, start_line=start + 1, code=code, closed=closed))
+        blocks.append(
+            MermaidBlock(index=len(blocks) + 1, start_line=start + 1, code=code, closed=closed, end_line=end_line)
+        )
     return blocks
 
 
@@ -120,8 +132,33 @@ def check_markdown(markdown: str) -> List[MermaidBlock]:
 
 
 def find_mmdc() -> Optional[str]:
-    """尋找 mermaid-cli（mmdc）。"""
+    """尋找 mermaid-cli（mmdc）。可用環境變數 MMDC_BIN 指定路徑。"""
+    env_bin = os.environ.get("MMDC_BIN")
+    if env_bin and os.access(env_bin, os.X_OK):
+        return env_bin
     return shutil.which("mmdc")
+
+
+def _puppeteer_config_file() -> Optional[str]:
+    """容器內常需指定 Chromium 並關閉沙箱；有 MERMAID_CHROME_PATH 或預裝 Chromium 時產生設定檔。"""
+    chrome = os.environ.get("MERMAID_CHROME_PATH") or (
+        "/opt/pw-browsers/chromium" if os.path.exists("/opt/pw-browsers/chromium") else None
+    )
+    if not chrome:
+        return None
+    cfg = {"executablePath": chrome, "args": ["--no-sandbox", "--headless"]}
+    fd, path = tempfile.mkstemp(suffix=".json", prefix="mmdc-puppeteer-")
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
+        json.dump(cfg, f)
+    return path
+
+
+def png_size(path: Path) -> Tuple[int, int]:
+    """讀 PNG 檔頭取得 (寬, 高) 像素。"""
+    header = Path(path).read_bytes()[:24]
+    if header[:8] != b"\x89PNG\r\n\x1a\n":
+        raise ValueError(f"不是 PNG 檔：{path}")
+    return struct.unpack(">II", header[16:24])
 
 
 def render_blocks(markdown: str, out_dir: Path, fmt: str = "png") -> List[Path]:
@@ -133,6 +170,7 @@ def render_blocks(markdown: str, out_dir: Path, fmt: str = "png") -> List[Path]:
     if not mmdc:
         raise RuntimeError("找不到 mermaid-cli（mmdc）。請先安裝：npm install -g @mermaid-js/mermaid-cli")
     out_dir.mkdir(parents=True, exist_ok=True)
+    pp_config = _puppeteer_config_file()
     produced: List[Path] = []
     for block in check_markdown(markdown):
         if block.issues:
@@ -140,8 +178,42 @@ def render_blocks(markdown: str, out_dir: Path, fmt: str = "png") -> List[Path]:
         src = out_dir / f"diagram-{block.index}.mmd"
         dst = out_dir / f"diagram-{block.index}.{fmt}"
         src.write_text(block.code + "\n", encoding="utf-8")
-        res = subprocess.run([mmdc, "-i", str(src), "-o", str(dst)], capture_output=True, text=True, check=False)
+        cmd = [mmdc, "-i", str(src), "-o", str(dst), "-b", "white"]
+        if fmt == "png":
+            cmd += ["-s", "2"]
+        if pp_config:
+            cmd += ["-p", pp_config]
+        res = subprocess.run(cmd, capture_output=True, text=True, check=False)
         if res.returncode != 0:
             raise RuntimeError(f"mmdc 轉圖失敗（區塊 #{block.index}）：{res.stderr.strip()[:300]}")
         produced.append(dst)
     return produced
+
+
+def embed_images(markdown: str, out_dir: Path, max_width: int = 620, max_height: int = 700) -> str:
+    """把每個 mermaid 區塊轉成 PNG 並換成內嵌 base64 的 HTML <img>，其餘內容不動。
+
+    回傳的文字交給 Markdown→HTML 轉換（原始 HTML 會被保留）。圖依 PNG 尺寸（2 倍縮放）換算顯示大小，
+    不超過 max_width × max_height，避免直式流程圖佔滿整頁。
+    """
+    import base64
+
+    blocks = check_markdown(markdown)
+    if not blocks:
+        return markdown
+    pngs: Dict[int, Path] = {b.index: p for b, p in zip(blocks, render_blocks(markdown, out_dir, fmt="png"))}
+    lines = markdown.splitlines()
+    # 由後往前替換，行號才不會位移
+    for block in reversed(blocks):
+        start, end = block.start_line - 1, block.end_line
+        png = pngs[block.index]
+        w, h = png_size(png)
+        w, h = w / 2, h / 2
+        scale = min(1.0, max_width / w, max_height / h)
+        data = base64.b64encode(png.read_bytes()).decode("ascii")
+        img = (
+            f'<p><img src="data:image/png;base64,{data}" width="{int(w * scale)}" height="{int(h * scale)}" '
+            f'alt="Mermaid 圖 {block.index}"></p>'
+        )
+        lines[start:end] = [img]
+    return "\n".join(lines) + "\n"

@@ -21,6 +21,7 @@ class LocalStorageBackend(StorageBackend):
         content: str,
         tags: List[str],
         doc_format: str = "doc",
+        html: Optional[str] = None,
     ) -> Tuple[str, str]:
         repo_dir = self.root_dir / sanitize_filename(repo)
         repo_dir.mkdir(parents=True, exist_ok=True)

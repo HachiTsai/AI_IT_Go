@@ -46,6 +46,14 @@ def test_bare_fence_with_diagram_declaration_is_recognised():
     assert blocks[0].issues == []
 
 
+def test_other_language_fence_does_not_swallow_following_mermaid():
+    md = "```python\nprint(1)\n```\n\n```mermaid\nflowchart TD\n  A --> B\n```\n"
+    blocks = mermaid.check_markdown(md)
+    assert len(blocks) == 1
+    assert blocks[0].start_line == 5 and blocks[0].end_line == 8
+    assert blocks[0].issues == []
+
+
 def test_non_mermaid_fences_ignored():
     assert mermaid.extract_blocks("```python\nprint(1)\n```\n") == []
 
