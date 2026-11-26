@@ -521,8 +521,6 @@ def main(argv: list[str] | None = None) -> int:
 
     if not articles and errors:
         return 1
-    if not args.no_resolve and articles and not any(a.resolve_ok for a in articles):
-        return 1
     return 0
 
 

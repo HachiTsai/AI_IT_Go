@@ -24,18 +24,27 @@ updated: 2026-11-26
 
 > "連結還原失敗處理：`resolve_google_news_url` 失敗時標記 `resolve_ok=false` 並記錄進 `errors`，不默默回傳 `news.google.com` 跳轉網址；若整批還原皆失敗則回傳非零結束碼。" — knowledge/raw/google-news-notebook-architecture-2026-11-26.md
 
-> "`--prefer-text` 模式：本機先抽取所有文章正文改用 `textContent` 送進 NotebookLM，完全避開目標網站封鎖 NotebookLM 雲端爬蟲，抽不到正文者直接淘汰並遞補。" — knowledge/raw/google-news-backfill-2026-11-26.md
+> "`--prefer-text` 模式：本機先抽取所有文章正文改用 `textContent` 送進 NotebookLM，避開 NotebookLM 雲端爬蟲網域封鎖；本機仍遇 401/403 抽不到正文者則淘汰並遞補。" — knowledge/raw/google-news-backfill-2026-11-26.md
 
 ## Antigravity Automation Runbook
 
-1. 執行腳本取得 JSON（例：`uv run python scripts/google_news_digest.py -q "AI" -r TW,US --hours 24 -n 8 --prefer-text -f json`；註：`--no-resolve` 僅供除錯略過還原用）。
+1. 執行腳本取得 JSON（例：`uv run python scripts/google_news_digest.py -q "AI" -r TW,US --hours 24 -n 8 --prefer-text --max-chars 6000 -f json`；註：`--no-resolve` 僅供除錯略過還原用）。
 2. 若腳本回傳非零結束碼、`articles` 為空或 `errors` 涵蓋全部地區，停止並通知使用者，不建立空筆記本。
 3. 呼叫 `gemini-notebook` MCP 的 `create_notebook`，以 `notebook_title`（`YYYY-MM-DD_新聞日報`）建立當天筆記本。
 4. 逐筆送入 `create_source`：
    - `delivery == "url"` 且 `resolve_ok == true`：送 `webContent.url = resolved_url`。
-   - `delivery == "text"` 且 `excerpt` 非空：送 `textContent`（`mimeType: "text/plain"`）。
-   - `delivery == "skip"`：跳過不送（已記錄於 `errors`）。
-5. 呼叫 `list_sources` 檢查狀態；若有 `FAILED` 且腳本或備援抓取有正文，改用 `textContent` 重送一次。
+   - `delivery == "text"` 且 `excerpt` 非空：送 `textContent`（`mimeType: "text/plain"`），並在正文最前面固定加上出處標頭：
+     ```text
+     標題：{title}
+     媒體：{source}
+     地區：{region}
+     時間：{published_at}
+     來源網址：{resolved_url}
+
+     {excerpt}
+     ```
+   - 還原或抽取失敗的文章會留在 `errors` 中，不會出現在 `articles`。
+5. 呼叫 `list_sources` 檢查狀態；若有 `FAILED` 且腳本或備援抓取有正文，改用含出處標頭的 `textContent` 重送一次。
 6. 回報使用者：筆記本名稱與連結、成功筆數、失敗筆數與標題（註：官方 MCP 無刪除 API，舊筆記本需於 NotebookLM 網頁版手動清理）。
 
 返回 [[index]]。
