@@ -50,7 +50,7 @@ dependencies = [
 ]
 
 [tool.pytest.ini_options]
-testpaths = [".claude/skills/commit-workflow/scripts/tests", "tests"]
+testpaths = [".claude/skills/commit-workflow/scripts/tests", ".claude/skills/study-notes/scripts/tests", "tests"]
 
 [tool.ruff]
 line-length = 120
