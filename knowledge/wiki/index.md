@@ -13,3 +13,4 @@ updated: 2026-11-18
 - [[gcp-free-tier]]：GCP 永久免費額度作業規格
 - [[colab-integration]]：Colab CLI 與 MCP 連接評估
 - [[tool-map]]：常用工具地圖備份（線上版為 Artifact）
+- [[google-news-antigravity]]：Google 新聞 RSS × Antigravity 結合指南與抓取工具
