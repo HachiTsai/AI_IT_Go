@@ -1,9 +1,9 @@
 """Mermaid 支援：擷取 ```mermaid 區塊、基本檢查、（選用）用 mermaid-cli 轉圖。
 
 設計原則：
-- 預設保留原始 ```mermaid 區塊不動（Google Drive 匯入 Markdown 時以程式碼區塊呈現，
-  再用 `read` 匯出時原始碼仍在）。是否能在 Google 文件中渲染成圖，取決於 Google 端，
-  本模組不假設。
+- 預設保留原始 ```mermaid 區塊不動。2026-11-26 實測：Google 文件匯入 Markdown 後，區塊變成
+  原生程式碼區塊（語言標籤「None」，清單沒有 Mermaid），不會渲染成圖；用 `read` 匯出 md 時
+  原始碼完整，但 mermaid 標籤會丟失，只剩無語言的 ```。
 - 檢查只做「肯定錯」的判斷（圍欄未閉合、第一行不是已知圖表類型、空區塊），
   不嘗試完整解析 Mermaid 語法，避免誤報。
 - 轉圖是選用功能，需自行安裝 mermaid-cli（mmdc）；沒有時明確回報而不是靜默略過。
@@ -26,7 +26,7 @@ DIAGRAM_TYPES = (
     "C4Container", "C4Component", "C4Dynamic", "C4Deployment", "radar", "radar-beta",
 )
 
-_FENCE_OPEN = re.compile(r"^(?P<indent>[ \t]*)(?P<fence>`{3,}|~{3,})[ \t]*mermaid[ \t]*$", re.I)
+_FENCE_OPEN = re.compile(r"^(?P<indent>[ \t]*)(?P<fence>`{3,}|~{3,})[ \t]*(?P<lang>mermaid)?[ \t]*$", re.I)
 
 
 @dataclass
@@ -39,7 +39,11 @@ class MermaidBlock:
 
 
 def extract_blocks(markdown: str) -> List[MermaidBlock]:
-    """依序擷取所有 ```mermaid 區塊（含未閉合者）。"""
+    """依序擷取所有 ```mermaid 區塊（含未閉合者）。
+
+    也會認出「沒有語言標籤、但內容第一行是已知圖表宣告」的圍欄：Google 文件匯入 Markdown 後，
+    ```mermaid 會變成原生程式碼區塊並丟失 mermaid 標籤，匯出時只剩 ```。
+    """
     lines = markdown.splitlines()
     blocks: List[MermaidBlock] = []
     i = 0
@@ -62,9 +66,12 @@ def extract_blocks(markdown: str) -> List[MermaidBlock]:
                 break
             body.append(lines[i])
             i += 1
-        blocks.append(
-            MermaidBlock(index=len(blocks) + 1, start_line=start + 1, code="\n".join(body).strip("\n"), closed=closed)
-        )
+        code = "\n".join(body).strip("\n")
+        if not m.group("lang"):
+            first = _first_meaningful_line(code)
+            if not (closed and first and _is_diagram_decl(first)):
+                continue
+        blocks.append(MermaidBlock(index=len(blocks) + 1, start_line=start + 1, code=code, closed=closed))
     return blocks
 
 
@@ -85,6 +92,10 @@ def _first_meaningful_line(code: str) -> Optional[str]:
     return None
 
 
+def _is_diagram_decl(line: str) -> bool:
+    return any(line == t or line.startswith(t + " ") or line.startswith(t + "\t") for t in DIAGRAM_TYPES)
+
+
 def validate_block(block: MermaidBlock) -> MermaidBlock:
     """檢查單一區塊，問題寫入 block.issues 並回傳同一物件。"""
     block.issues = []
@@ -96,7 +107,7 @@ def validate_block(block: MermaidBlock) -> MermaidBlock:
     first = _first_meaningful_line(block.code)
     if first is None:
         block.issues.append("只有註解，沒有圖表內容")
-    elif not any(first == t or first.startswith(t + " ") or first.startswith(t + "\t") for t in DIAGRAM_TYPES):
+    elif not _is_diagram_decl(first):
         block.issues.append(f"第一行 '{first[:40]}' 不是已知的 Mermaid 圖表宣告（例如 flowchart TD、sequenceDiagram）")
     if block.code.count("[") != block.code.count("]") or block.code.count("(") != block.code.count(")"):
         block.issues.append("括號數量不成對，可能有節點文字沒閉合")

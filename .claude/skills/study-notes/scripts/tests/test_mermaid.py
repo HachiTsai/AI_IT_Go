@@ -38,6 +38,14 @@ def test_detects_definite_problems(md, fragment):
     assert any(fragment in i for i in issues)
 
 
+def test_bare_fence_with_diagram_declaration_is_recognised():
+    # Google 文件匯出 md 後，```mermaid 會變成無標籤的 ```
+    md = "```\nflowchart TD\n  A --> B\n```\n\n```py\nprint(1)\n```\n\n```\n普通文字\n```\n"
+    blocks = mermaid.check_markdown(md)
+    assert len(blocks) == 1
+    assert blocks[0].issues == []
+
+
 def test_non_mermaid_fences_ignored():
     assert mermaid.extract_blocks("```python\nprint(1)\n```\n") == []
 

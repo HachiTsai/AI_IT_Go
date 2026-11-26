@@ -78,8 +78,10 @@ python3 .claude/skills/study-notes/scripts/note.py list
 ---
 
 ### 5. Mermaid 圖表
-筆記內文可直接寫 ```` ```mermaid ```` 區塊，原始碼會原樣保留（`read` 匯出後仍在）。
-Google 文件端是否把它渲染成圖取決於 Google，本技能不保證；需要圖檔時用轉圖指令。
+筆記內文可直接寫 ```` ```mermaid ```` 區塊。2026-11-26 實測 Google 文件的行為：
+- 不會渲染成圖：匯入後變成原生程式碼區塊（語言「None」，語言清單沒有 Mermaid）。
+- 原始碼完整保留，`read` 匯出 md 時內容不變，但 `mermaid` 標籤會丟失，只剩無語言的圍欄；`mermaid check` 會把「第一行是已知圖表宣告的無標籤圍欄」也當成 Mermaid 檢查。
+- 要看到圖：用 GitHub（repo 的 wiki／README 會直接渲染），或用下方轉圖指令產生圖檔。
 
 ```bash
 # 檢查（不需要 Drive）：圍欄未閉合、空區塊、第一行不是已知圖表宣告、括號不成對
