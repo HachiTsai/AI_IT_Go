@@ -2,6 +2,7 @@
 title: Google 新聞 × Antigravity 結合指南
 sources:
   - knowledge/raw/google-news-notebook-architecture-2026-11-26.md
+  - knowledge/raw/google-news-backfill-2026-11-26.md
 updated: 2026-11-26
 ---
 
@@ -23,9 +24,11 @@ updated: 2026-11-26
 
 > "連結還原失敗處理：`resolve_google_news_url` 失敗時標記 `resolve_ok=false` 並記錄進 `errors`，不默默回傳 `news.google.com` 跳轉網址；若整批還原皆失敗則回傳非零結束碼。" — knowledge/raw/google-news-notebook-architecture-2026-11-26.md
 
+> "`--prefer-text` 模式：本機先抽取所有文章正文改用 `textContent` 送進 NotebookLM，完全避開目標網站封鎖 NotebookLM 雲端爬蟲，抽不到正文者直接淘汰並遞補。" — knowledge/raw/google-news-backfill-2026-11-26.md
+
 ## Antigravity Automation Runbook
 
-1. 執行腳本取得 JSON（例：`uv run python scripts/google_news_digest.py -q "AI" -r TW,US --hours 24 -n 5 -f json`；註：`--no-resolve` 僅供除錯略過還原用）。
+1. 執行腳本取得 JSON（例：`uv run python scripts/google_news_digest.py -q "AI" -r TW,US --hours 24 -n 8 --prefer-text -f json`；註：`--no-resolve` 僅供除錯略過還原用）。
 2. 若腳本回傳非零結束碼、`articles` 為空或 `errors` 涵蓋全部地區，停止並通知使用者，不建立空筆記本。
 3. 呼叫 `gemini-notebook` MCP 的 `create_notebook`，以 `notebook_title`（`YYYY-MM-DD_新聞日報`）建立當天筆記本。
 4. 逐筆送入 `create_source`：

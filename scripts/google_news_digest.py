@@ -30,6 +30,7 @@ REGION_PRESETS: dict[str, tuple[str, str, str]] = {
 # 實測會封鎖 NotebookLM 直接抓網頁的網域，命中時改由本機抽取正文以 textContent 送出
 BLOCKED_DOMAINS: tuple[str, ...] = (
     "tw.stock.yahoo.com",
+    "finance.yahoo.com",
     "cnbc.com",
     "reuters.com",
 )
@@ -320,19 +321,43 @@ def resolve_google_news_url(
         return None, False, f"連結還原失敗 ({exc})"
 
 
+def _fetch_excerpt(url: str, client: httpx.Client, max_chars: int) -> tuple[str, str | None]:
+    """抓取網頁並抽取正文段落，回傳 (excerpt, error_message)。"""
+    try:
+        resp = client.get(url)
+        if resp.status_code != 200:
+            return "", f"正文抽取 HTTP {resp.status_code}"
+        if "html" not in resp.headers.get("content-type", "").lower():
+            return "", "非 HTML 內容，略過正文抽取"
+        text = extract_paragraphs(resp.text, max_chars=max_chars)
+        if not text:
+            return "", "正文抽取結果為空"
+        return text, None
+    except Exception as exc:
+        return "", f"正文抽取失敗 ({exc})"
+
+
 def enrich_articles(
     articles: list[NewsArticle],
+    limit_per_region: int | None = None,
     max_chars: int = 2000,
     timeout: float = 10.0,
-    delay: float = 0.3,
-) -> list[str]:
-    """還原原始網址並標記傳送方式 (`url` 或 `text`)；僅對被擋網域抽取正文。"""
+    delay: float = 0.25,
+    prefer_text: bool = False,
+) -> tuple[list[NewsArticle], list[str]]:
+    """還原原始網址、判斷傳送方式並支援失敗遞補；回傳 `(deliverable_articles, errors)`。"""
+    kept: list[NewsArticle] = []
+    kept_counts: dict[str, int] = {}
     errors: list[str] = []
     headers = {"User-Agent": USER_AGENT}
+
     with httpx.Client(timeout=timeout, follow_redirects=True, headers=headers) as client:
         for idx, article in enumerate(articles):
+            if limit_per_region and kept_counts.get(article.region, 0) >= limit_per_region:
+                continue
             if idx > 0 and delay > 0:
                 time.sleep(delay)
+
             real_url, ok, err = resolve_google_news_url(article.link, client)
             article.resolve_ok = ok
             article.resolved_url = real_url
@@ -342,19 +367,22 @@ def enrich_articles(
                     errors.append(f"[{article.region}] {article.title}: {err}")
                 continue
 
-            if is_blocked_domain(real_url):
-                article.delivery = "text"
-                try:
-                    resp = client.get(real_url)
-                    if resp.status_code == 200 and "html" in resp.headers.get("content-type", "").lower():
-                        article.excerpt = extract_paragraphs(resp.text, max_chars=max_chars)
-                    else:
-                        errors.append(f"[{article.region}] {article.title}: 正文抽取 HTTP {resp.status_code}")
-                except Exception as exc:
-                    errors.append(f"[{article.region}] {article.title}: 正文抽取失敗 ({exc})")
+            if prefer_text or is_blocked_domain(real_url):
+                excerpt, ex_err = _fetch_excerpt(real_url, client, max_chars=max_chars)
+                if excerpt:
+                    article.delivery = "text"
+                    article.excerpt = excerpt
+                    kept.append(article)
+                    kept_counts[article.region] = kept_counts.get(article.region, 0) + 1
+                else:
+                    article.delivery = "skip"
+                    errors.append(f"[{article.region}] {article.title}: {ex_err}")
             else:
                 article.delivery = "url"
-    return errors
+                kept.append(article)
+                kept_counts[article.region] = kept_counts.get(article.region, 0) + 1
+
+    return kept, errors
 
 
 def render_markdown(articles: list[NewsArticle], query: str | None = None, errors: list[str] | None = None) -> str:
@@ -431,8 +459,13 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("-n", "--limit", type=int, default=10, help="每個地區最多保留幾則（預設 10）")
     parser.add_argument("--hours", type=int, default=48, help="只保留最近幾小時內的新聞，0 表示不限（預設 48）")
-    parser.add_argument("--no-resolve", action="store_true", help="略過原始網址還原與被擋網域正文抽取")
-    parser.add_argument("--max-chars", type=int, default=2000, help="被擋網域最多抽取幾字元正文（預設 2000）")
+    parser.add_argument("--no-resolve", action="store_true", help="略過原始網址還原與被擋網域正文抽取（僅供除錯）")
+    parser.add_argument(
+        "--prefer-text",
+        action="store_true",
+        help="優先本機抽取所有文章正文改用 textContent 送出，抽不到正文者直接跳過並自動遞補",
+    )
+    parser.add_argument("--max-chars", type=int, default=2000, help="抽取正文上限字元數（預設 2000）")
     parser.add_argument(
         "-f",
         "--format",
@@ -451,15 +484,21 @@ def main(argv: list[str] | None = None) -> int:
     if not regions:
         parser.error("至少需要指定一個地區代碼")
 
+    pool_limit = args.limit if args.no_resolve else args.limit * 3
     articles, errors = collect_news(
         regions=regions,
         query=args.query,
-        limit=args.limit,
+        limit=pool_limit,
         hours=args.hours,
     )
 
     if not args.no_resolve and articles:
-        enrich_errors = enrich_articles(articles, max_chars=args.max_chars)
+        articles, enrich_errors = enrich_articles(
+            articles,
+            limit_per_region=args.limit,
+            max_chars=args.max_chars,
+            prefer_text=args.prefer_text,
+        )
         errors.extend(enrich_errors)
 
     now = datetime.now().astimezone()

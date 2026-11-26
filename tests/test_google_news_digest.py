@@ -87,6 +87,7 @@ class TestGoogleNewsDigest(unittest.TestCase):
     def test_is_blocked_domain(self):
         self.assertTrue(gnd.is_blocked_domain("https://www.reuters.com/world/ai"))
         self.assertTrue(gnd.is_blocked_domain("https://tw.stock.yahoo.com/news/abc"))
+        self.assertTrue(gnd.is_blocked_domain("https://finance.yahoo.com/news/abc"))
         self.assertTrue(gnd.is_blocked_domain("https://www.cnbc.com/2026/11/26/ai.html"))
         self.assertFalse(gnd.is_blocked_domain("https://udn.com/news/story/6811/9903707"))
 
@@ -151,8 +152,36 @@ class TestGoogleNewsDigest(unittest.TestCase):
         self.assertEqual(rc, 1)
         payload = json.loads(mock_print.call_args.args[0])
         self.assertEqual(len(payload["errors"]), 2)
-        self.assertTrue(all(not a["resolve_ok"] for a in payload["articles"]))
-        self.assertTrue(all(a["delivery"] == "skip" for a in payload["articles"]))
+        self.assertEqual(payload["articles"], [])
+
+    def test_enrich_backfill_and_prefer_text(self):
+        candidates = [
+            gnd.NewsArticle("US", "Story 1", "Reuters", "https://news.google.com/rss/articles/1", None),
+            gnd.NewsArticle("US", "Story 2", "CNBC", "https://news.google.com/rss/articles/2", None),
+            gnd.NewsArticle("US", "Story 3", "AP", "https://news.google.com/rss/articles/3", None),
+        ]
+        resolved = [
+            ("https://www.reuters.com/1", True, None),
+            ("https://www.cnbc.com/2", True, None),
+            ("https://apnews.com/3", True, None),
+        ]
+        excerpts = [
+            ("", "正文抽取 HTTP 401"),
+            ("CNBC full article body text here.", None),
+            ("AP full article body text here.", None),
+        ]
+        with (
+            patch.object(gnd, "resolve_google_news_url", side_effect=resolved),
+            patch.object(gnd, "_fetch_excerpt", side_effect=excerpts),
+        ):
+            kept, errors = gnd.enrich_articles(candidates, limit_per_region=2, delay=0, prefer_text=True)
+
+        self.assertEqual(len(kept), 2)
+        self.assertEqual([a.title for a in kept], ["Story 2", "Story 3"])
+        self.assertTrue(all(a.delivery == "text" for a in kept))
+        self.assertEqual(len(errors), 1)
+        self.assertIn("HTTP 401", errors[0])
+        self.assertEqual(candidates[0].delivery, "skip")
 
 
 if __name__ == "__main__":
