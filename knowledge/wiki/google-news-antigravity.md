@@ -3,7 +3,7 @@ title: Google 新聞 × Antigravity 結合指南
 sources:
   - knowledge/raw/google-news-notebook-architecture-2026-11-26.md
   - knowledge/raw/google-news-backfill-2026-11-26.md
-updated: 2026-11-26
+updated: 2026-11-27
 ---
 
 # Google 新聞 × Antigravity 結合指南
@@ -27,6 +27,8 @@ updated: 2026-11-26
 > "`--prefer-text` 模式：本機先抽取所有文章正文改用 `textContent` 送進 NotebookLM，避開 NotebookLM 雲端爬蟲網域封鎖；本機仍遇 401/403 抽不到正文者則淘汰並遞補。" — knowledge/raw/google-news-backfill-2026-11-26.md
 
 ## Antigravity Automation Runbook
+
+每日台美四分桶排程的完整 SOP（7 道抓取指令、合併去重、失敗降級、Issue #41 回報）已抽離為專案技能 `.claude/skills/daily-news-notebook/SKILL.md`；本機 `sidecar.json` 只保留排程與權限。以下為單次抓取的通用流程。
 
 1. 執行腳本取得 JSON（例：`uv run python scripts/google_news_digest.py -q "AI" -r TW,US --hours 24 -n 8 --prefer-text --max-chars 6000 -f json`；註：`--no-resolve` 僅供除錯略過還原用）。
 2. 若腳本回傳非零結束碼、`articles` 為空或 `errors` 涵蓋全部地區，停止並通知使用者，不建立空筆記本。
