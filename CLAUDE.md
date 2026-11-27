@@ -9,6 +9,7 @@
 - **知識庫（knowledge/）作業規範**：@[.claude/rules/knowledge-base.md](.claude/rules/knowledge-base.md)
 - **專案提示、開 PR 與 issue 附圖規範**：@[.claude/rules/project-workflow.md](.claude/rules/project-workflow.md)
 - **跨專案通用學習筆記技能**：@[.claude/skills/study-notes/SKILL.md](.claude/skills/study-notes/SKILL.md)
+- **每日台美新聞 NotebookLM 工作流技能**：@[.claude/skills/daily-news-notebook/SKILL.md](.claude/skills/daily-news-notebook/SKILL.md)
 
 ## 開發、擴充與提交鐵律
 
