@@ -15,8 +15,7 @@
 | **版控與協作** | `git` / `git-lfs` | `/usr/bin/git` | `2.54.0+` | 版本控制與大型檔案管理 |
 | | `gh` | `/opt/homebrew/bin/gh` | `2.101.0+` | GitHub CLI（PR、Issue、Webhook、Repo 管理） |
 | | `lab` | `/opt/homebrew/bin/lab` | 最新穩定版 | GitLab CLI |
-| **語言與套件管理** | `conda` | `/opt/homebrew/Caskroom/miniforge/base/bin/conda` | `26.1.1+` | 本機 Python 虛擬環境管理（Miniforge） |
-| | `uv` | `/opt/homebrew/bin/uv` | `0.13.1+` | 高速 Python 套件與虛擬環境管理（雲端與本機通用） |
+| **語言與套件管理** | `uv` | `/opt/homebrew/bin/uv` | `0.13.1+` | 高速 Python 套件與虛擬環境管理（雲端與本機通用；本機不使用 conda） |
 | | `pipx` | `/opt/homebrew/bin/pipx` | 最新穩定版 | 全域隔離安裝 Python CLI 工具 |
 | | `node` / `npm` | `/opt/homebrew/bin/node` | `v25.9.0+` | Node.js 執行環境與 MCP Server 依賴 |
 | **高速搜尋與系統** | `rg` (ripgrep) | `/opt/homebrew/bin/rg` | `15.2.0+` | 程式碼全文檢索首選（取代傳統 `grep`） |
@@ -35,8 +34,8 @@
 # 核心 CLI 工具（Formulae）
 brew install gh uv ripgrep fd pipx node kubernetes-cli minikube docker git-lfs gnupg mkdocs-material
 
-# 雲端與環境管理（Casks）
-brew install --cask gcloud-cli miniforge
+# 雲端工具（Casks）
+brew install --cask gcloud-cli
 
 # GCP CLI 進階組件（Cloud Monitoring / Billing Budgets 必備）
 gcloud components install alpha beta --quiet
