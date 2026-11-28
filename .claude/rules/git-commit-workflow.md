@@ -8,6 +8,8 @@
    - 所有變更（包括功能開發、重構、工具、文件與規範）都在指定的分支上 commit 並推送，向 `main` 發起 Pull Request。
    - PR 的 GitHub Actions CI（`lint-and-tests`：`ruff check .` 與 `pytest`）全綠後才可合併，失敗需立刻修正。
    - **禁止直接 push 到 `main` 分支**。
+   - `claude/*`、`agy/*` 的 PR 在 `lint-and-tests` 通過後，由 `ci.yml` 的 `auto-merge` job 自動合併（草稿會先轉正式）。Agent 不需手動合併；合併後確認 `main` 的 CI 通過並清理本機分支。
+   - 推送前就要確認內容可以合併：開 PR 後 CI 一綠就會併入 `main`。需要使用者先同意的變更，取得同意後才推送。
 2. **合併方式一律採用 Merge Commit**：
    - 不使用 squash、不使用 rebase，保留分支上每個 commit 的完整訊息與歷程，便於以 `git log --grep` 追溯歷史決策。
 

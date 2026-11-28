@@ -13,8 +13,8 @@
 1. 在指定分支提交（用 `committer.py`），向 `main` 開 PR，**一律先開草稿（draft）**。
 2. PR 內文開頭若專案設定提供了署名區塊（`claude-projects-attribution` 註解與「Requested by」那一行），原樣放在最前面，編輯時不得刪除。
 3. 開 PR 後：把 `HachiTsai` 設為 assignee，再另外一次呼叫請求其 review（兩步各自獨立，失敗就略過）。若 PR 作者本人就是 `HachiTsai`，GitHub 不允許對自己請求 review，略過即可。
-4. 開完 PR 後訂閱其活動（CI、review），CI 全綠且無衝突後依 `git-commit-workflow.md` 以 Merge Commit 合併。
-5. 只為測試或實驗而開的 PR，結束後依 hachi 指示關閉，不主動刪遠端分支。
+4. 開完 PR 後訂閱其活動（CI、review）。`claude/*`、`agy/*` 分支由 CI 的 `auto-merge` 自動合併；其他分支在 CI 全綠且無衝突後依 `git-commit-workflow.md` 以 Merge Commit 合併。
+5. 只為測試或實驗而開的 PR，分支不用 `claude/`、`agy/` 前綴（否則會被自動合併），結束後依 hachi 指示關閉，不主動刪遠端分支。
 
 ## 3. 問題截圖與 issue 附圖（2026-11-25 實測）
 
