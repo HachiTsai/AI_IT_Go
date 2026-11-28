@@ -6,7 +6,7 @@ import subprocess
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
-from .base import StorageBackend
+from .base import StorageBackend, StorageError
 from .common import format_note, note_stem, sanitize_filename
 
 # Google Workspace 原生 MIME 類型映射
@@ -96,9 +96,8 @@ class GDriveCliStorageBackend(StorageBackend):
         res = self._run_gdrive(upload_cmd)
 
         if res.returncode != 0:
-            return (
-                f"上傳 Google Drive 失敗：{res.stderr.strip()}",
-                str(temp_file),
+            raise StorageError(
+                f"上傳 Google Drive 失敗：{res.stderr.strip()}\n待上傳的內容保留在暫存檔: {temp_file}"
             )
 
         # 從回傳中提取 File ID
