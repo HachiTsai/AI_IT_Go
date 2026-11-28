@@ -44,6 +44,7 @@ python3 .claude/skills/study-notes/scripts/note.py add \
 ```
 
 - 上傳 Drive 失敗時 `add` 以 exit 1 結束，錯誤寫到 stderr，並列出保留待上傳內容的暫存檔路徑。
+- 找不到也建不出 repo 子資料夾（拿不到資料夾 ID）時，`add`、帶 `--repo` 的 `list`／`read` 以 exit 1 結束，不會改用根目錄。
 
 - 從檔案讀取長篇 Markdown 內容並轉為 Google 文件：
 ```bash
