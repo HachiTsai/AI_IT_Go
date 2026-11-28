@@ -22,3 +22,28 @@ jobs:
         run: python -m pytest -q
       - name: Study Notes 技能單元測試
         run: python -m unittest discover -s .claude/skills/study-notes/scripts/tests -v
+
+  # CI 全綠後自動以 merge commit 合併 claude/*、agy/* 的 PR（草稿會先轉正式）。
+  # 本 repo 公開：只放行同一 repo 的分支，fork 的 PR 不會執行。
+  # 要暫時不合併的 PR（測試、實驗），分支不要用 claude/ 或 agy/ 前綴。
+  auto-merge:
+    name: auto-merge
+    needs: [lint-and-tests]
+    if: >-
+      github.event_name == 'pull_request'
+      && (startsWith(github.head_ref, 'claude/') || startsWith(github.head_ref, 'agy/'))
+      && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions: {}
+    steps:
+      - name: 草稿 PR 先轉為 Ready（已是 Ready 則無動作）
+        env:
+          GH_TOKEN: ${{ secrets.AUTO_MERGE_PAT }}
+        run: gh pr ready "${{ github.event.pull_request.number }}" --repo "${{ github.repository }}"
+      - name: 以 merge commit 合併（用 PAT，合併後才會觸發 main 的 CI）
+        env:
+          GH_TOKEN: ${{ secrets.AUTO_MERGE_PAT }}
+        run: >-
+          gh pr merge "${{ github.event.pull_request.number }}" --repo "${{ github.repository }}"
+          --merge --delete-branch --match-head-commit "${{ github.event.pull_request.head.sha }}"
