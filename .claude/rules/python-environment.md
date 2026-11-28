@@ -3,8 +3,15 @@
 ## 1. 執行環境選擇
 
 - **本機環境（macOS / Antigravity）**：
-  - 統一使用 Conda 環境 `ai-it-go`（Python 3.14，路徑：`/opt/homebrew/Caskroom/miniforge/base/envs/ai-it-go/bin/python`）。
-  - 執行任何 Python 腳本、`pytest`、`ruff` 或 `pyright` 時，優先指定該環境的直譯器與執行檔。
+  - 統一使用專案根目錄的 `.venv`（Python 3.14，與 CI 一致），本專案不使用 conda（2026-11-28 使用者同意）。
+  - 建立或重建時用 `uv` 管理的 Python，套件依 `uv.lock`：
+
+    ```bash
+    uv venv --python 3.14 --managed-python .venv
+    uv sync --locked
+    ```
+
+  - 執行任何 Python 腳本、`pytest`、`ruff` 或 `pyright` 時，優先指定該環境的直譯器與執行檔（`.venv/bin/python`）。
 - **雲端環境（Claude Web）**：
   - 使用專案目錄下的 `.venv`（或家目錄 `~/.venv`），由 Setup Script 或 `scripts/init.sh` 自動以 `uv` 建立（`uv pip install --python .venv/bin/python -r pyproject.toml`）。
 

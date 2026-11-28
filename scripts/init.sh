@@ -23,9 +23,9 @@ authenticate_gcp() {
 
 authenticate_gcp
 
-# 2) Python 虛擬環境（雲端環境具備 uv 且未使用 Conda 時自動建立 .venv）
+# 2) Python 虛擬環境（具備 uv 時自動建立 .venv）
 cd "$REPO_ROOT" || exit 1
-if command -v uv >/dev/null 2>&1 && [ -z "$CONDA_DEFAULT_ENV" ]; then
+if command -v uv >/dev/null 2>&1; then
   uv venv --allow-existing --python 3.14 .venv
   if [ -f "pyproject.toml" ]; then
     uv pip install --python .venv/bin/python -r pyproject.toml
