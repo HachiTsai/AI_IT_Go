@@ -7,6 +7,10 @@ class StorageError(Exception):
     """筆記沒有存到目標後端。訊息直接給使用者看。"""
 
 
+class NoOpenError(StorageError):
+    """目標在標記 no open 的資料夾，依規則拒絕進入。"""
+
+
 class StorageBackend:
     def add(
         self,

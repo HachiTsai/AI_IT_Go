@@ -14,7 +14,7 @@ FOLDERS = '''echo '[{"id": "SUB", "name": "R", "mimeType": "application/vnd.goog
 FAIL = 'echo "rate limit exceeded" >&2; exit 1'
 
 
-def _run(tmp_path, cli_args, root_ls, sub_ls='echo "[]"', export="exit 1"):
+def _run(tmp_path, cli_args, root_ls, sub_ls='echo "[]"', export="exit 1", info="exit 1"):
     fake = tmp_path / "gdrive"
     fake.write_text(
         "#!/bin/sh\n"
@@ -26,6 +26,7 @@ def _run(tmp_path, cli_args, root_ls, sub_ls='echo "[]"', export="exit 1"):
         f"      {sub_ls}\n"
         "    fi ;;\n"
         f'  "readonly export") {export} ;;\n'
+        f'  "readonly info") {info} ;;\n'
         '  "readonly download") exit 1 ;;\n'
         "esac\n",
         encoding="utf-8",
@@ -69,7 +70,10 @@ def test_list_says_no_notes_only_when_query_succeeds(tmp_path):
 
 
 def test_read_by_file_id_still_works_when_listing_fails(tmp_path):
-    res = _run(tmp_path, ["read", "FILEID", "--repo", "R"], FAIL, export='echo "note body" > "$4"')
+    res = _run(
+        tmp_path, ["read", "FILEID", "--repo", "R"], FAIL,
+        export='echo "note body" > "$4"', info="""echo '{"name": "note", "parents": []}'""",
+    )
 
     assert res.returncode == 0, res.stderr
     assert "note body" in res.stdout

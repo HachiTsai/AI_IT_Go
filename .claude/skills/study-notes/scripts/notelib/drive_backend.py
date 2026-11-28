@@ -6,8 +6,8 @@ import subprocess
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
-from .base import StorageBackend, StorageError
-from .common import format_note, note_stem, sanitize_filename
+from .base import NoOpenError, StorageBackend, StorageError
+from .common import ensure_folder_allowed, format_note, is_no_open, note_stem, sanitize_filename
 
 # Google Workspace 原生 MIME 類型映射
 WORKSPACE_MIME_TYPES = {
@@ -69,6 +69,7 @@ class GDriveCliStorageBackend(StorageBackend):
 
         清單查不到時丟 StorageError：不知道資料夾在不在就建立，會產生同名資料夾。
         """
+        ensure_folder_allowed(repo)
         try:
             items = self._list_items(self.folder_id)
         except StorageError as exc:
@@ -163,6 +164,26 @@ class GDriveCliStorageBackend(StorageBackend):
             link_str or file_id,
         )
 
+    @staticmethod
+    def _notes_in(repo: str, items: List[Dict]) -> List[Dict]:
+        """從資料夾內容挑出筆記（Google Workspace 文件與 .md），略過子資料夾與其他檔案。"""
+        notes = []
+        for item in items:
+            mime = item.get("mimeType", "")
+            if mime == "application/vnd.google-apps.folder":
+                continue
+            if mime in WORKSPACE_TYPE_NAMES or item.get("name", "").endswith(".md"):
+                notes.append(
+                    {
+                        "repo": repo,
+                        "filename": item.get("name"),
+                        "type": WORKSPACE_TYPE_NAMES.get(mime, "Markdown 📝"),
+                        "id": item.get("id"),
+                        "modified": item.get("modifiedTime", ""),
+                    }
+                )
+        return notes
+
     def list_notes(self, repo: Optional[str] = None) -> List[Dict]:
         notes = []
         if repo:
@@ -172,46 +193,58 @@ class GDriveCliStorageBackend(StorageBackend):
             target_folders = [
                 (item.get("name"), item.get("id"))
                 for item in self._list_items(self.folder_id)
-                if item.get("mimeType") == "application/vnd.google-apps.folder"
+                if item.get("mimeType") == "application/vnd.google-apps.folder" and not is_no_open(item.get("name"))
             ]
 
         for r_name, f_id in target_folders:
-            for item in self._list_items(f_id):
-                mime = item.get("mimeType", "")
-                if mime == "application/vnd.google-apps.folder":
-                    continue
-                if mime in WORKSPACE_TYPE_NAMES or item.get("name", "").endswith(".md"):
-                    type_name = WORKSPACE_TYPE_NAMES.get(mime, "Markdown 📝")
-                    notes.append(
-                        {
-                            "repo": r_name,
-                            "filename": item.get("name"),
-                            "type": type_name,
-                            "id": item.get("id"),
-                            "modified": item.get("modifiedTime", ""),
-                        }
-                    )
+            notes.extend(self._notes_in(r_name, self._list_items(f_id)))
         notes.sort(key=lambda x: (x["repo"], x["filename"]))
         return notes
 
     def search(self, query: str, repo: Optional[str] = None) -> List[Dict]:
-        items = self._query_list(["readonly", "search", "--name-contains", query, "--json"], "搜尋 Drive 失敗")
-        results = []
-        for item in items:
-            mime = item.get("mimeType", "")
-            type_name = WORKSPACE_TYPE_NAMES.get(mime, "檔案")
-            results.append(
-                {
-                    "repo": repo or "Remote",
-                    "filename": item.get("name"),
-                    "type": type_name,
-                    "id": item.get("id"),
-                    "snippet": f"匹配 Drive {type_name}: {item.get('name')}",
-                }
-            )
+        """依檔名搜尋筆記資料夾（根目錄與各 repo 子資料夾）；不搜尋 Drive 其他位置，也不建立資料夾。"""
+        if repo:
+            folder_id = self._find_repo_folder(repo)
+            notes = self._notes_in(repo, self._list_items(folder_id)) if folder_id else []
+        else:
+            root_items = self._list_items(self.folder_id)
+            notes = self._notes_in("根目錄", root_items)
+            for item in root_items:
+                if item.get("mimeType") == "application/vnd.google-apps.folder" and not is_no_open(item.get("name")):
+                    notes.extend(self._notes_in(item.get("name"), self._list_items(item.get("id"))))
+
+        keyword = query.lower()
+        results = [
+            {**note, "snippet": f"匹配 Drive {note['type']}: {note['filename']}"}
+            for note in notes
+            if keyword in note["filename"].lower()
+        ]
+        results.sort(key=lambda x: (x["repo"], x["filename"]))
         return results
 
+    def _ensure_readable(self, file_id: str) -> None:
+        """直接用 ID 讀取前，只查 metadata 逐層確認不在 no open 資料夾內；查不到就不讀。"""
+        pending, seen = [file_id], set()
+        while pending:
+            current = pending.pop()
+            if current in seen:
+                continue
+            seen.add(current)
+            res = self._run_gdrive(["readonly", "info", current, "--json"])
+            try:
+                info = json.loads(res.stdout) if res.returncode == 0 else None
+                name = info["name"]
+            except (ValueError, KeyError, TypeError):
+                raise StorageError(f"找不到筆記，或無法確認「{file_id}」的上層資料夾，未讀取：{res.stderr.strip()}")
+            if current == file_id and info.get("mimeType") == "application/vnd.google-apps.shortcut":
+                raise StorageError(f"「{file_id}」是捷徑，無法確認目標位置，未讀取；請改用目標檔案的 ID")
+            if current != file_id or info.get("mimeType") == "application/vnd.google-apps.folder":
+                ensure_folder_allowed(name)
+            pending.extend(info.get("parents") or [])
+
     def read(self, identifier: str, repo: Optional[str] = None) -> Optional[str]:
+        if repo:
+            ensure_folder_allowed(repo)
         temp_dir = Path("/tmp/claude_notes")
         temp_dir.mkdir(parents=True, exist_ok=True)
         out_file = temp_dir / "read_note.md"
@@ -248,7 +281,15 @@ class GDriveCliStorageBackend(StorageBackend):
                     break
 
         if matched_id:
-            file_id = matched_id
+            file_id = matched_id  # 清單已略過 no open 資料夾
+        else:
+            try:
+                self._ensure_readable(file_id)
+            except StorageError as exc:
+                # 清單查詢本身失敗時回報查詢錯誤；no open 的拒絕一律照實回報
+                if listing_error and not isinstance(exc, NoOpenError):
+                    raise listing_error from exc
+                raise
 
         # 優先嘗試以 export --format md 讀取 Google Doc
         res = self._run_gdrive(["readonly", "export", file_id, str(out_file), "--format", "md"])

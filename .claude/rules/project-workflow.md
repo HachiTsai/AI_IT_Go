@@ -5,7 +5,7 @@
 ## 1. 專案提示（標準作業）
 
 1. **開新 session 先安全同步**：先執行 `git pull --ff-only`（或 `committer.py --sync`），只做 fast-forward。
-2. **Drive 資料夾輪詢**：嚴禁進入標記「no open」的資料夾。
+2. **Drive 資料夾輪詢**：嚴禁進入標記「no open」的資料夾。標記方式是資料夾名稱含 `no open`（全形視同半形、不分大小寫，忽略標點、符號、空白與底線）；本機 Drive 同步目錄同樣適用。`study-notes` 以 `is_no_open` 強制執行。
 3. **嚴禁敏感資訊入庫**：金鑰、webhook 網址、個人資訊不得寫入 git 追蹤的檔案。
 
 ## 2. 開 PR 流程
