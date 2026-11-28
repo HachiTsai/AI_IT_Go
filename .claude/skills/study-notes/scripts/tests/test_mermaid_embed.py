@@ -120,7 +120,8 @@ def test_drive_backend_uploads_html_as_google_doc(tmp_path):
 def test_cli_image_mode_failure_aborts_without_saving(tmp_path):
     f = tmp_path / "n.md"
     f.write_text("```mermaid\nflowchart TD\n  A --> B\n```\n", encoding="utf-8")
-    env = {"AGENT_STUDY_NOTES_DIR": str(tmp_path / "notes"), "PATH": "/usr/bin:/bin", "MMDC_BIN": "/nonexistent"}
+    env = {"AGENT_STUDY_NOTES_DIR": str(tmp_path / "notes"), "HOME": str(tmp_path),
+           "PATH": "/usr/bin:/bin", "MMDC_BIN": "/nonexistent"}
     res = subprocess.run(
         [sys.executable, str(SCRIPTS / "note.py"), "add", "-c", "T", "-t", "x", "--content-file", str(f),
          "--mermaid-mode", "image", "--repo", "R"],
