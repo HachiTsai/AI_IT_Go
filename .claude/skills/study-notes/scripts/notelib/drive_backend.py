@@ -47,18 +47,22 @@ class GDriveCliStorageBackend(StorageBackend):
         cmd = [self.gdrive_bin] + args
         return subprocess.run(cmd, capture_output=True, text=True, check=False)
 
-    def _list_items(self, folder_id: str) -> List[Dict]:
-        """列出資料夾內容；查詢失敗丟 StorageError，不可當成空資料夾。"""
-        res = self._run_gdrive(["readonly", "ls", folder_id, "--json"])
+    def _query_list(self, args: List[str], error: str) -> List[Dict]:
+        """執行回傳 JSON 清單的唯讀查詢；失敗丟 StorageError，不可當成沒有結果。"""
+        res = self._run_gdrive(args)
         if res.returncode != 0:
-            raise StorageError(f"查詢 Drive 清單失敗：{res.stderr.strip()}")
+            raise StorageError(f"{error}：{res.stderr.strip()}")
         try:
             items = json.loads(res.stdout.strip() or "[]")
         except ValueError:
             items = None
         if not isinstance(items, list):
-            raise StorageError(f"查詢 Drive 清單失敗：ls 輸出不是清單: {res.stdout.strip()[:200]!r}")
+            raise StorageError(f"{error}：輸出不是清單: {res.stdout.strip()[:200]!r}")
         return items
+
+    def _list_items(self, folder_id: str) -> List[Dict]:
+        """列出資料夾內容。"""
+        return self._query_list(["readonly", "ls", folder_id, "--json"], "查詢 Drive 清單失敗")
 
     def _find_repo_folder(self, repo: str) -> Optional[str]:
         """在筆記根目錄找 repo 資料夾；確定沒有才回傳 None。
@@ -191,25 +195,20 @@ class GDriveCliStorageBackend(StorageBackend):
         return notes
 
     def search(self, query: str, repo: Optional[str] = None) -> List[Dict]:
-        res = self._run_gdrive(["readonly", "search", "--name-contains", query, "--json"])
+        items = self._query_list(["readonly", "search", "--name-contains", query, "--json"], "搜尋 Drive 失敗")
         results = []
-        if res.returncode == 0:
-            try:
-                items = json.loads(res.stdout.strip() or "[]")
-                for item in items:
-                    mime = item.get("mimeType", "")
-                    type_name = WORKSPACE_TYPE_NAMES.get(mime, "檔案")
-                    results.append(
-                        {
-                            "repo": repo or "Remote",
-                            "filename": item.get("name"),
-                            "type": type_name,
-                            "id": item.get("id"),
-                            "snippet": f"匹配 Drive {type_name}: {item.get('name')}",
-                        }
-                    )
-            except Exception:
-                pass
+        for item in items:
+            mime = item.get("mimeType", "")
+            type_name = WORKSPACE_TYPE_NAMES.get(mime, "檔案")
+            results.append(
+                {
+                    "repo": repo or "Remote",
+                    "filename": item.get("name"),
+                    "type": type_name,
+                    "id": item.get("id"),
+                    "snippet": f"匹配 Drive {type_name}: {item.get('name')}",
+                }
+            )
         return results
 
     def read(self, identifier: str, repo: Optional[str] = None) -> Optional[str]:

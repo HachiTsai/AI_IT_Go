@@ -46,6 +46,7 @@ python3 .claude/skills/study-notes/scripts/note.py add \
 - 上傳 Drive 失敗時 `add` 以 exit 1 結束，錯誤寫到 stderr，並列出保留待上傳內容的暫存檔路徑。
 - 查詢資料夾清單失敗時不會建立資料夾（避免產生同名資料夾）。查詢失敗，或建立後拿不到資料夾 ID 時，`add`、帶 `--repo` 的 `list`／`read` 以 exit 1 結束，不會改用根目錄。
 - `list` 查詢 Drive 清單失敗時以 exit 1 結束，不會顯示「沒有筆記」；`read` 清單查詢失敗時仍會嘗試用檔案 ID 讀取，讀不到才回報查詢錯誤。
+- `search` 查詢失敗時以 exit 1 結束，只有查詢成功且沒有結果才顯示未找到。
 
 - 從檔案讀取長篇 Markdown 內容並轉為 Google 文件：
 ```bash
