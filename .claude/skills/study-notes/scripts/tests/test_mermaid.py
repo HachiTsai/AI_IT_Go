@@ -76,7 +76,8 @@ def test_cli_check_and_strict_add(tmp_path):
     bad = tmp_path / "bad.md"
     bad.write_text("```mermaid\nnope\n```\n", encoding="utf-8")
     note = str(SCRIPTS / "note.py")
-    env = {"AGENT_STUDY_NOTES_DIR": str(tmp_path / "notes"), "PATH": "/usr/bin:/bin"}
+    # HOME 指向暫存目錄：沒給 HOME 時 Path.home() 仍會解析到真實家目錄，裝有 gdrive 的機器就會選到 Drive 後端
+    env = {"AGENT_STUDY_NOTES_DIR": str(tmp_path / "notes"), "HOME": str(tmp_path), "PATH": "/usr/bin:/bin"}
 
     assert subprocess.run([sys.executable, note, "mermaid", "check", str(good)], capture_output=True, env=env).returncode == 0
     assert subprocess.run([sys.executable, note, "mermaid", "check", str(bad)], capture_output=True, env=env).returncode == 1
