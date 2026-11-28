@@ -47,21 +47,28 @@ class GDriveCliStorageBackend(StorageBackend):
         cmd = [self.gdrive_bin] + args
         return subprocess.run(cmd, capture_output=True, text=True, check=False)
 
-    def _find_repo_folder(self, repo: str) -> Optional[str]:
-        """在筆記根目錄找 repo 資料夾；確定沒有才回傳 None。
-
-        清單查不到時丟 StorageError：不知道資料夾在不在就建立，會產生同名資料夾。
-        """
-        res = self._run_gdrive(["readonly", "ls", self.folder_id, "--json"])
-        error = f"無法取得 Drive 資料夾「{repo}」，已中止：查詢資料夾清單失敗："
+    def _list_items(self, folder_id: str) -> List[Dict]:
+        """列出資料夾內容；查詢失敗丟 StorageError，不可當成空資料夾。"""
+        res = self._run_gdrive(["readonly", "ls", folder_id, "--json"])
         if res.returncode != 0:
-            raise StorageError(error + res.stderr.strip())
+            raise StorageError(f"查詢 Drive 清單失敗：{res.stderr.strip()}")
         try:
             items = json.loads(res.stdout.strip() or "[]")
         except ValueError:
             items = None
         if not isinstance(items, list):
-            raise StorageError(error + f"ls 輸出不是清單: {res.stdout.strip()[:200]!r}")
+            raise StorageError(f"查詢 Drive 清單失敗：ls 輸出不是清單: {res.stdout.strip()[:200]!r}")
+        return items
+
+    def _find_repo_folder(self, repo: str) -> Optional[str]:
+        """在筆記根目錄找 repo 資料夾；確定沒有才回傳 None。
+
+        清單查不到時丟 StorageError：不知道資料夾在不在就建立，會產生同名資料夾。
+        """
+        try:
+            items = self._list_items(self.folder_id)
+        except StorageError as exc:
+            raise StorageError(f"無法取得 Drive 資料夾「{repo}」，已中止：{exc}") from exc
         for item in items:
             if item.get("name") == repo and item.get("mimeType") == "application/vnd.google-apps.folder":
                 return item["id"]
@@ -158,38 +165,28 @@ class GDriveCliStorageBackend(StorageBackend):
             target_folders = [(repo, self._get_or_create_repo_folder(repo))]
         else:
             # 遍歷所有 repo 資料夾以列出真正的筆記文件
-            target_folders = []
-            res_root = self._run_gdrive(["readonly", "ls", self.folder_id, "--json"])
-            if res_root.returncode == 0:
-                try:
-                    for item in json.loads(res_root.stdout.strip() or "[]"):
-                        if item.get("mimeType") == "application/vnd.google-apps.folder":
-                            target_folders.append((item.get("name"), item.get("id")))
-                except Exception:
-                    pass
+            target_folders = [
+                (item.get("name"), item.get("id"))
+                for item in self._list_items(self.folder_id)
+                if item.get("mimeType") == "application/vnd.google-apps.folder"
+            ]
 
         for r_name, f_id in target_folders:
-            res = self._run_gdrive(["readonly", "ls", f_id, "--json"])
-            if res.returncode == 0:
-                try:
-                    items = json.loads(res.stdout.strip() or "[]")
-                    for item in items:
-                        mime = item.get("mimeType", "")
-                        if mime == "application/vnd.google-apps.folder":
-                            continue
-                        if mime in WORKSPACE_TYPE_NAMES or item.get("name", "").endswith(".md"):
-                            type_name = WORKSPACE_TYPE_NAMES.get(mime, "Markdown 📝")
-                            notes.append(
-                                {
-                                    "repo": r_name,
-                                    "filename": item.get("name"),
-                                    "type": type_name,
-                                    "id": item.get("id"),
-                                    "modified": item.get("modifiedTime", ""),
-                                }
-                            )
-                except Exception:
-                    pass
+            for item in self._list_items(f_id):
+                mime = item.get("mimeType", "")
+                if mime == "application/vnd.google-apps.folder":
+                    continue
+                if mime in WORKSPACE_TYPE_NAMES or item.get("name", "").endswith(".md"):
+                    type_name = WORKSPACE_TYPE_NAMES.get(mime, "Markdown 📝")
+                    notes.append(
+                        {
+                            "repo": r_name,
+                            "filename": item.get("name"),
+                            "type": type_name,
+                            "id": item.get("id"),
+                            "modified": item.get("modifiedTime", ""),
+                        }
+                    )
         notes.sort(key=lambda x: (x["repo"], x["filename"]))
         return notes
 
@@ -224,7 +221,12 @@ class GDriveCliStorageBackend(StorageBackend):
 
         # 優先從清單中依檔名或 ID 比對
         matched_id = None
-        all_notes = self.list_notes(repo)
+        # 清單查不到時仍嘗試把 identifier 當檔案 ID 讀取；也讀不到才回報查詢錯誤
+        listing_error = None
+        try:
+            all_notes = self.list_notes(repo)
+        except StorageError as exc:
+            all_notes, listing_error = [], exc
 
         # 1. 精確比對檔名或 ID
         for n in all_notes:
@@ -261,4 +263,6 @@ class GDriveCliStorageBackend(StorageBackend):
             with open(out_file, "r", encoding="utf-8") as f:
                 return f.read()
 
+        if listing_error:
+            raise listing_error
         return None
