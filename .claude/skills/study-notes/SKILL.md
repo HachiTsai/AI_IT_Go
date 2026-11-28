@@ -30,6 +30,15 @@ metadata:
 
 ---
 
+## ⛔ no open 資料夾
+
+資料夾名稱含 `no open`（全形視同半形、不分大小寫，忽略標點、符號、空白與底線）者一律不進入，兩種後端皆同：
+
+- 走訪全部資料夾時（`list`、`search`）直接略過。
+- `--repo` 指到這種名稱時，`add`、`list`、`read`、`search` 在任何 Drive 呼叫前就中止。
+- `read` 直接給檔案 ID 時，先只查 metadata 逐層確認上層資料夾；在 no open 底下、無法確認或該 ID 是捷徑就不讀。
+- `--content-file`、`mermaid` 子指令讀取的是使用者指定的本機檔案，不在此檢查範圍。
+
 ## 🛠️ 常用指令
 
 腳本位置：`.claude/skills/study-notes/scripts/note.py`
@@ -47,6 +56,7 @@ python3 .claude/skills/study-notes/scripts/note.py add \
 - 查詢資料夾清單失敗時不會建立資料夾（避免產生同名資料夾）。查詢失敗，或建立後拿不到資料夾 ID 時，`add`、帶 `--repo` 的 `list`／`read` 以 exit 1 結束，不會改用根目錄。
 - `list` 查詢 Drive 清單失敗時以 exit 1 結束，不會顯示「沒有筆記」；`read` 清單查詢失敗時仍會嘗試用檔案 ID 讀取，讀不到才回報查詢錯誤。
 - `search` 查詢失敗時以 exit 1 結束，只有查詢成功且沒有結果才顯示未找到。
+- Drive 後端的 `search` 依檔名比對（不分大小寫），只找筆記根目錄與其下一層的專案資料夾；`--repo` 只找該專案資料夾，找不到時不會建立。
 
 - 從檔案讀取長篇 Markdown 內容並轉為 Google 文件：
 ```bash

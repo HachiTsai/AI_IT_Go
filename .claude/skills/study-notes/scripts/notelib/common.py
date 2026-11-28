@@ -5,8 +5,11 @@ import os
 import re
 import shutil
 import subprocess
+import unicodedata
 from pathlib import Path
 from typing import List, Optional
+
+from .base import NoOpenError
 
 DEFAULT_FOLDER_ID = "1Xlj49hpabV47WMzctSNS29_Vuuh6ddHn"
 # 無 gdrive CLI 且未設定 AGENT_STUDY_NOTES_DIR 時的本機暫存位置（不會同步到 Google Drive）
@@ -73,3 +76,18 @@ def find_gdrive_bin() -> Optional[str]:
     if system_bin:
         return system_bin
     return None
+
+
+def is_no_open(name: Optional[str]) -> bool:
+    """資料夾名稱是否標記 no open：全形視同半形、不分大小寫，忽略所有標點、符號、空白與底線後含 noopen。
+
+    寧可多擋：例如 `piano open` 也會符合，改資料夾名稱即可。
+    """
+    folded = unicodedata.normalize("NFKC", name or "").casefold()
+    return "noopen" in re.sub(r"[\W_]+", "", folded)
+
+
+def ensure_folder_allowed(name: Optional[str]) -> None:
+    """no open 資料夾一律不進入（.claude/rules/project-workflow.md）。"""
+    if is_no_open(name):
+        raise NoOpenError(f"資料夾「{name}」標記為 no open，不進入")

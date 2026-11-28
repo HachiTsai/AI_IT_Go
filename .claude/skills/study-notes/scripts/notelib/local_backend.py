@@ -5,11 +5,13 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 from .base import StorageBackend
-from .common import format_note, note_stem, sanitize_filename
+from .common import ensure_folder_allowed, format_note, is_no_open, note_stem, sanitize_filename
 
 
 class LocalStorageBackend(StorageBackend):
     def __init__(self, root_dir: Path):
+        for part in root_dir.resolve().parts:
+            ensure_folder_allowed(part)
         self.root_dir = root_dir
         self.root_dir.mkdir(parents=True, exist_ok=True)
 
@@ -23,6 +25,7 @@ class LocalStorageBackend(StorageBackend):
         doc_format: str = "doc",
         html: Optional[str] = None,
     ) -> Tuple[str, str]:
+        ensure_folder_allowed(repo)
         repo_dir = self.root_dir / sanitize_filename(repo)
         repo_dir.mkdir(parents=True, exist_ok=True)
 
@@ -43,9 +46,12 @@ class LocalStorageBackend(StorageBackend):
     def list_notes(self, repo: Optional[str] = None) -> List[Dict]:
         notes = []
         if repo:
+            ensure_folder_allowed(repo)
             target_dirs = [self.root_dir / sanitize_filename(repo)]
         else:
-            target_dirs = [p for p in self.root_dir.iterdir() if p.is_dir()]
+            target_dirs = [p for p in self.root_dir.iterdir() if not is_no_open(p.name) and p.is_dir()]
+        # 捷徑或符號連結指向 no open 資料夾也不進入
+        target_dirs = [p for p in target_dirs if not any(is_no_open(part) for part in p.resolve().parts)]
 
         for r_dir in target_dirs:
             if not r_dir.exists():
@@ -102,8 +108,12 @@ class LocalStorageBackend(StorageBackend):
         return results
 
     def read(self, identifier: str, repo: Optional[str] = None) -> Optional[str]:
+        if repo:
+            ensure_folder_allowed(repo)
         target = Path(identifier)
         if target.exists() and target.is_file():
+            for part in target.resolve().parts[:-1]:
+                ensure_folder_allowed(part)
             with open(target, "r", encoding="utf-8") as f:
                 return f.read()
 
