@@ -18,7 +18,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from notelib.base import StorageBackend  # noqa: E402
+from notelib.base import StorageBackend, StorageError  # noqa: E402
 from notelib.common import (  # noqa: E402,F401
     DEFAULT_FOLDER_ID,
     FALLBACK_CACHE_DIR,
@@ -227,15 +227,19 @@ def main():
                 print("⚠️ 目前不是 Drive 後端，--mermaid-mode image 不會產生圖片文件，只存 Markdown。", file=sys.stderr)
 
         tags = [t.strip() for t in (args.tags or "").split(",") if t.strip()]
-        msg, doc_id = backend.add(
-            repo=repo_name,
-            category=args.category,
-            title=args.title,
-            content=content,
-            tags=tags,
-            doc_format=args.format,
-            html=html_text,
-        )
+        try:
+            msg, doc_id = backend.add(
+                repo=repo_name,
+                category=args.category,
+                title=args.title,
+                content=content,
+                tags=tags,
+                doc_format=args.format,
+                html=html_text,
+            )
+        except StorageError as exc:
+            print(f"錯誤: {exc}", file=sys.stderr)
+            sys.exit(1)
         print(msg)
 
     elif args.command == "search":

@@ -43,6 +43,8 @@ python3 .claude/skills/study-notes/scripts/note.py add \
   --content "## 📌 核心摘要\n...\n## 🛠️ 排錯步驟\n..."
 ```
 
+- 上傳 Drive 失敗時 `add` 以 exit 1 結束，錯誤寫到 stderr，並列出保留待上傳內容的暫存檔路徑。
+
 - 從檔案讀取長篇 Markdown 內容並轉為 Google 文件：
 ```bash
 python3 .claude/skills/study-notes/scripts/note.py add \

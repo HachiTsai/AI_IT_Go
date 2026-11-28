@@ -3,6 +3,10 @@
 from typing import Dict, List, Optional, Tuple
 
 
+class StorageError(Exception):
+    """筆記沒有存到目標後端。訊息直接給使用者看。"""
+
+
 class StorageBackend:
     def add(
         self,
@@ -14,7 +18,7 @@ class StorageBackend:
         doc_format: str = "doc",
         html: Optional[str] = None,
     ) -> Tuple[str, str]:
-        """新增筆記，回傳 (狀態訊息, 檔案路徑或ID或URL)。
+        """新增筆記，回傳 (狀態訊息, 檔案路徑或ID或URL)；儲存失敗丟 StorageError。
 
         html：已含內嵌圖片的完整 HTML；只有 Drive 後端會用它上傳並轉成 Google 文件，其他後端忽略。
         """
