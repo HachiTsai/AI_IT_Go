@@ -24,6 +24,17 @@ WORKSPACE_TYPE_NAMES = {
 }
 
 
+def _extract_id(stdout: str) -> str:
+    """從 gdrive 輸出取出檔案／資料夾 ID：文字格式 `(ID: x)` 或 JSON 的 id；取不到回傳空字串。"""
+    m = re.search(r"\(ID:\s*([^\)\s]+)\)", stdout)
+    if m:
+        return m.group(1)
+    try:
+        return json.loads(stdout.strip()).get("id", "")
+    except (ValueError, AttributeError):
+        return ""
+
+
 class GDriveCliStorageBackend(StorageBackend):
     """
     透過 gdrive CLI 直接在雲端建立與管理 Google 原生文件格式 (Docs, Sheets, Slides)。
@@ -48,14 +59,13 @@ class GDriveCliStorageBackend(StorageBackend):
                 pass
 
         res_mkdir = self._run_gdrive(["mutate", "mkdir", repo, "--parent", self.folder_id, "--json"])
-        if res_mkdir.returncode == 0:
-            try:
-                data = json.loads(res_mkdir.stdout.strip())
-                if "id" in data:
-                    return data["id"]
-            except Exception:
-                pass
-        return self.folder_id
+        folder_id = _extract_id(res_mkdir.stdout) if res_mkdir.returncode == 0 else ""
+        if folder_id:
+            return folder_id
+
+        # 不可退回根目錄：筆記會放錯位置卻回報成功
+        detail = res_mkdir.stderr.strip() or f"mkdir 輸出中找不到 ID: {res_mkdir.stdout.strip()!r}"
+        raise StorageError(f"無法取得 Drive 資料夾「{repo}」，已中止：{detail}")
 
     def add(
         self,
@@ -101,15 +111,7 @@ class GDriveCliStorageBackend(StorageBackend):
             )
 
         # 從回傳中提取 File ID
-        m = re.search(r"\(ID:\s*([^\)]+)\)", res.stdout)
-        file_id = m.group(1) if m else ""
-
-        if not file_id:
-            try:
-                data = json.loads(res.stdout.strip())
-                file_id = data.get("id", "")
-            except Exception:
-                pass
+        file_id = _extract_id(res.stdout)
 
         doc_url = ""
         if file_id:

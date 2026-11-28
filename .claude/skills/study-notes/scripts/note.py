@@ -227,19 +227,15 @@ def main():
                 print("⚠️ 目前不是 Drive 後端，--mermaid-mode image 不會產生圖片文件，只存 Markdown。", file=sys.stderr)
 
         tags = [t.strip() for t in (args.tags or "").split(",") if t.strip()]
-        try:
-            msg, doc_id = backend.add(
-                repo=repo_name,
-                category=args.category,
-                title=args.title,
-                content=content,
-                tags=tags,
-                doc_format=args.format,
-                html=html_text,
-            )
-        except StorageError as exc:
-            print(f"錯誤: {exc}", file=sys.stderr)
-            sys.exit(1)
+        msg, doc_id = backend.add(
+            repo=repo_name,
+            category=args.category,
+            title=args.title,
+            content=content,
+            tags=tags,
+            doc_format=args.format,
+            html=html_text,
+        )
         print(msg)
 
     elif args.command == "search":
@@ -277,4 +273,8 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except StorageError as exc:
+        print(f"錯誤: {exc}", file=sys.stderr)
+        sys.exit(1)
